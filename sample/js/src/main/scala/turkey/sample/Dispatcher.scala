@@ -1,4 +1,4 @@
-package turkey.experiments.sample
+package turkey.sample
 
 import turkey.tasks._
 

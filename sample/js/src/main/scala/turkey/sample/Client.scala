@@ -1,6 +1,5 @@
-package turkey.experiments.sample
+package turkey.sample
 
-import turkey.experiments._
 import turkey.tasks._
 
 import scalajs.js
@@ -16,7 +15,6 @@ import japgolly.scalajs.react._
 import scalacss.DevDefaults._
 import scalacss.ScalaCssReact._
 
-import autowire._
 import upickle.default._
 
 import monocle._

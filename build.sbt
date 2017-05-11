@@ -2,7 +2,7 @@ val monocleVersion = "1.4.0-M2"
 val scalaJSReactVersion = "0.11.1"
 
 lazy val root = project.in(file("."))
-  .aggregate(turkeyJVM, turkeyJS)
+  .aggregate(turkeyJVM, turkeyJS, turkeySampleJVM, turkeySampleJS)
   .settings(
   publish := {},
   publishLocal := {})
@@ -18,18 +18,60 @@ lazy val turkey = crossProject.settings(
   libraryDependencies ++= Seq(
     "com.lihaoyi" %%% "upickle" % "0.4.1",
     "com.lihaoyi" %%% "scalatags" % "0.4.6",
-    "com.lihaoyi" %%% "autowire" % "0.2.5",
-    "com.lihaoyi" %%% "fastparse" % "0.3.7",
-    "com.github.julien-truffaut" %%% "monocle-core"  % monocleVersion,
-    "com.github.julien-truffaut" %%% "monocle-macro" % monocleVersion,
-    "com.jsuereth" % "scala-arm_2.11" % "2.0-RC1",
     "com.softwaremill.macmemo" %% "macros" % "0.4-SNAPSHOT"
   ),
   addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 ).jvmSettings(
+  libraryDependencies ++= Seq(
+    "com.typesafe.akka" %% "akka-actor" % "2.4.8",
+    "com.typesafe.akka" %% "akka-http-experimental" % "2.4.9",
+    "com.jsuereth" % "scala-arm_2.11" % "2.0-RC1",
+    // java deps:
+    "log4j" % "log4j" % "1.2.17",
+    "net.ettinsmoor" % "java-aws-mturk" % "1.6.2"
+      exclude("org.apache.commons","not-yet-commons-ssl")
+      exclude("apache-xerces","xercesImpl")
+      exclude("apache-xerces","resolver")
+      exclude("apache-xerces","xml-apis"),
+    "ca.juliusdavies" % "not-yet-commons-ssl" % "0.3.11",
+    "xerces" % "xercesImpl" % "2.9.1"
+  )
+).jsSettings(
+  addCompilerPlugin("org.scalamacros" %% "paradise" % "2.1.0" cross CrossVersion.full),
+  libraryDependencies ++= Seq(
+    "org.scala-js" %%% "scalajs-dom" % "0.9.0",
+    "be.doeraene" %%% "scalajs-jquery" % "0.9.0"),
+  // TODO decide which of these are necessary
+  relativeSourceMaps := true,
+  scalaJSStage in Global := FastOptStage,
+  persistLauncher in Compile := true,
+  persistLauncher in Test := false,
+  skip in packageJSDependencies := false,
+  jsDependencies ++= Seq(
+    RuntimeDOM,
+    "org.webjars" % "jquery" % "2.1.4" / "2.1.4/jquery.js")
+)
+
+lazy val turkeyJS = turkey.js
+lazy val turkeyJVM = turkey.jvm
+
+lazy val turkeySample = crossProject.in(file("sample")).settings(
+  name := "turkey-sample",
+  organization := "com.github.julianmichael",
+  version := "0.1-SNAPSHOT",
+  // scalaOrganization in ThisBuild := "org.typelevel", // for fixing stupid serialization woes
+  scalaVersion in ThisBuild := "2.11.8",
+  scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked"),
+  resolvers += Resolver.sonatypeRepo("snapshots"),
+  libraryDependencies ++= Seq(
+    "com.lihaoyi" %%% "upickle" % "0.4.1",
+    "com.lihaoyi" %%% "scalatags" % "0.4.6",
+    "com.github.julien-truffaut" %%% "monocle-core"  % monocleVersion,
+    "com.github.julien-truffaut" %%% "monocle-macro" % monocleVersion
+  )
+).jvmSettings(
   fork in console := true,
   libraryDependencies ++= Seq(
-    "org.scalaz" %% "scalaz-core" % "7.2.4",
     // TODO eventually switch to this if necessary
     // "com.github.pathikrit" % "better-files_2.11" % "2.16.0",
     "com.typesafe.akka" %% "akka-actor" % "2.4.8",
@@ -83,5 +125,5 @@ lazy val turkey = crossProject.settings(
   )
 )
 
-lazy val turkeyJS = turkey.js
-lazy val turkeyJVM = turkey.jvm
+lazy val turkeySampleJS = turkeySample.js.dependsOn(turkeyJS)
+lazy val turkeySampleJVM = turkeySample.jvm.dependsOn(turkeyJVM)

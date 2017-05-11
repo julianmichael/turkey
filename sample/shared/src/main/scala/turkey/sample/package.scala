@@ -1,4 +1,4 @@
-package turkey.experiments
+package turkey
 
 package object sample {
   case class SamplePrompt(id: Int)
