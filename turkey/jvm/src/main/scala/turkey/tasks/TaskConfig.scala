@@ -57,6 +57,10 @@ sealed trait TaskConfig {
 
   /** Service for storing and getting finished HIT data */
   val hitDataService: HITDataService
+
+  /** Name of the project you're building your JS files with; used to determine what JS
+    * files the client asks for */
+  val projectName: String
 }
 
 object TaskConfig {
@@ -75,6 +79,7 @@ object TaskConfig {
 
 /** Complete configuration for running on production. */
 case class ProductionTaskConfig(
+  override val projectName: String,
   override val serverDomain: String,
   override val hitDataService: HITDataService
 ) extends TaskConfig {
@@ -94,6 +99,7 @@ case class ProductionTaskConfig(
 
 /** Complete configuration for running on the sandbox. */
 case class SandboxTaskConfig(
+  override val projectName: String,
   override val serverDomain: String,
   override val hitDataService: HITDataService) extends TaskConfig {
   private[this] val config = TaskConfig.loadGlobalConfig()

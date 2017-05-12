@@ -22,6 +22,7 @@ lazy val turkey = crossProject.settings(
   ),
   addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 ).jvmSettings(
+  // fork in console := true,
   libraryDependencies ++= Seq(
     "com.typesafe.akka" %% "akka-actor" % "2.4.8",
     "com.typesafe.akka" %% "akka-http-experimental" % "2.4.9",
@@ -126,4 +127,9 @@ lazy val turkeySample = crossProject.in(file("sample")).settings(
 )
 
 lazy val turkeySampleJS = turkeySample.js.dependsOn(turkeyJS)
-lazy val turkeySampleJVM = turkeySample.jvm.dependsOn(turkeyJVM)
+lazy val turkeySampleJVM = turkeySample.jvm.dependsOn(turkeyJVM).settings(
+  (resources in Compile) += (fastOptJS in (turkeySampleJS, Compile)).value.data,
+  (resources in Compile) += (packageScalaJSLauncher in (turkeySampleJS, Compile)).value.data,
+  (resources in Compile) += (packageJSDependencies in (turkeySampleJS, Compile)).value
+)
+

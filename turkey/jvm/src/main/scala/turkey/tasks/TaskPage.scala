@@ -6,7 +6,11 @@ import upickle.default._
 
 /** Contains the general HTML template for tasks. */
 object TaskPage {
-  def htmlPage[Prompt : Writer](prompt: Prompt, taskSpec: TaskSpecification, useHttps: Boolean = true)(implicit config: TaskConfig) = {
+  def htmlPage[Prompt : Writer](
+    prompt: Prompt,
+    taskSpec: TaskSpecification,
+    useHttps: Boolean = true)(
+    implicit config: TaskConfig) = {
     import config._
     val protocol = if(useHttps) "https:" else "http:"
     val port = if(useHttps) httpsPort else httpPort
@@ -18,14 +22,13 @@ object TaskPage {
         ),
         script(
           `type` := "text/javascript",
-          src := s"$protocol//$serverDomain:$port/mts-jsdeps.js"),
+          src := s"$protocol//$serverDomain:$port/$projectName-jsdeps.js"),
         script(
           `type` := "text/javascript",
-          src := s"$protocol//$serverDomain:$port/mts-fastopt.js"),
+          src := s"$protocol//$serverDomain:$port/$projectName-fastopt.js"),
         script(
           `type` := "text/javascript",
-          src := s"$protocol//$serverDomain:$port/mts-launcher.js"),
-        // TODO this is temporary while using copypasta'd stylesheets. get rid of this when all is unified grandly
+          src := s"$protocol//$serverDomain:$port/$projectName-launcher.js"),
         link(
           rel := "stylesheet",
           `type` := "text/css",

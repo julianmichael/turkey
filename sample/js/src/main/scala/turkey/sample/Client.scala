@@ -44,7 +44,9 @@ object Client extends TaskClient[SamplePrompt, SampleResponse] {
         val socket = new dom.WebSocket(websocketUri)
         socket.onopen = { (event: Event) =>
           scope.setState(Loading("Retrieving data")).runNow
-          socket.send(write(SentenceRequest(prompt.id)))
+          socket.send(
+            write[HeartbeatingWebSocketMessage[ApiRequest]](
+              WebSocketMessage(SentenceRequest(prompt.id))))
         }
         socket.onerror = { (event: ErrorEvent) =>
           val msg = s"Connection failure. Error code: ${event.colno}"
@@ -52,9 +54,10 @@ object Client extends TaskClient[SamplePrompt, SampleResponse] {
           // TODO maybe retry or something
         }
         socket.onmessage = { (event: MessageEvent) ⇒
-          val response = read[ApiResponse](event.data.toString)
-          response match {
-            case SentenceResponse(id, sentence) =>
+          val msg = event.data.toString
+          read[HeartbeatingWebSocketMessage[ApiResponse]](msg) match {
+            case Heartbeat => socket.send(msg) // send heartbeat back
+            case WebSocketMessage(SentenceResponse(id, sentence)) =>
               scope.setState(Loaded(sentence, false)).runNow
           }
         }
@@ -78,7 +81,7 @@ object Client extends TaskClient[SamplePrompt, SampleResponse] {
             <.p(s"Loading sentence ($msg)...")
           case Loaded(sentence, isGood) =>
             <.div(
-              <.p(sentence),
+              <.blockquote(sentence),
               <.p(
                 <.label(
                   <.input(
@@ -88,7 +91,22 @@ object Client extends TaskClient[SamplePrompt, SampleResponse] {
                   ),
                   "Yes, it is a good sentence."
                 )
-              )
+              ),
+              <.p(
+                <.input(
+                  ^.`type` := "text",
+                  ^.name := feedbackLabel,
+                  ^.placeholder := "Feedback? (Optional)",
+                  ^.margin := "1px",
+                  ^.padding := "1px",
+                  ^.width := "484px"
+                )
+              ),
+              <.input(
+                ^.`type` := "submit",
+                ^.disabled := isNotAssigned,
+                ^.id := submitButtonLabel,
+                ^.value := "submit") 
             )
         }
       )
@@ -111,7 +129,6 @@ object Client extends TaskClient[SamplePrompt, SampleResponse] {
     <.p("""This is a sample task. Please indicate whether the given sentence is good.
            Examples of good sentences include:"""),
     <.ul(
-      <.li("""Why did you vote for Hillary when you knew she would send me to war?"""),
       <.li("""Tell her that a double-income family is actually the true Igbo tradition
            because in pre-colonial times, mothers farmed and traded."""),
       <.li("""Chudi does not deserve any special gratitude or praise, nor do you -
@@ -120,11 +137,8 @@ object Client extends TaskClient[SamplePrompt, SampleResponse] {
     <.p("""Examples of not-good sentences include:"""),
     <.ul(
       <.li("""So because of her unfounded concern over vote rigging, she committed voter fraud."""),
-      <.li("""Make America great again."""),
       <.li("""Comey told FBI employees he didn't want to "be misleading to the American people"
-           by not supplementing the record of the investigation."""),
-      <.li("""Donald Trump and Vladimir Putin's bromance has been
-           the weirdest subplot of America's wild presidential election.""")),
+           by not supplementing the record of the investigation.""")),
     <.hr(),
     <.p(s"""Please indicate whether the following sentence is good:""")
   )
