@@ -17,9 +17,13 @@ import resource.managed
 import resource.ManagedResource
 
 // Works for now; ideally would be implemented against a database.
-// buuuuut we don't REALLY need to worry about data races; it's write-only.
+// buuuuut we don't really need to worry about data races; it's write-only.
 // database could be helpful when working with a huge dataset though.
-class HITDataFileSystemService private (root: Path) extends HITDataService {
+// also could potentially refactor things so this doesn't need to be aware of sandbox/production;
+// problem with that is that the TaskConfig object currently takes one of these as an argument
+// so that needs to be decided before the TaskConfig object is created
+// (which is where we generally make the sandbox/production distinction)
+class FileSystemHITDataService(root: Path, isProduction: Boolean) extends HITDataService {
 
   // == Basic auxiliary methods ==
 
@@ -48,10 +52,11 @@ class HITDataFileSystemService private (root: Path) extends HITDataService {
   // Convenience methods to get file paths and create missing directories if necessary.
 
   private[this] def getRootPath: Path = {
-    if(!Files.exists(root)) {
-      Files.createDirectories(root);
+    val path = root.resolve(if(isProduction) "production" else "sandbox")
+    if(!Files.exists(path)) {
+      Files.createDirectories(path);
     }
-    root
+    path
   }
 
   private[this] def getHITTypePath(hitTypeId: String): Path = {
