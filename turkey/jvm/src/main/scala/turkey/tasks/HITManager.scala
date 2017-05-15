@@ -14,6 +14,8 @@ import akka.actor.ActorRef
 
 import upickle.default._
 
+import com.typesafe.scalalogging.StrictLogging
+
 // TODO get rid of reviewy complexity and stuff; just implement next task's logic
 abstract class HITManager[Prompt, Response](
   helper: HITManager.Helper[Prompt, Response]
@@ -48,7 +50,7 @@ object HITManager {
     val responseReader: Reader[R],
     val responseWriter: Writer[R],
     val config: TaskConfig
-  ) {
+  ) extends StrictLogging {
     private type Prompt = P
     private type Response = R
 
@@ -76,9 +78,7 @@ object HITManager {
         .filter(hit => hit.getHITTypeId().equals(hitTypeId))
         .foreach(hit => {
                    service.disableHIT(hit.getHITId())
-                   println
-                   println(s"Disabled HIT: ${hit.getHITId()}")
-                   println(s"HIT type for disabled HIT: ${hitTypeId}")
+                   logger.info(s"Disabled HIT: ${hit.getHITId()}\nHIT type for disabled HIT: ${hitTypeId}")
                  })
     }
 
@@ -89,7 +89,7 @@ object HITManager {
       for {
         mTurkHIT <- config.service.searchAllHITs
         if mTurkHIT.getHITTypeId.equals(hitTypeId)
-        hit <- hitDataService.getHIT[Prompt](hitTypeId, mTurkHIT.getHITId).toOptionPrinting
+        hit <- hitDataService.getHIT[Prompt](hitTypeId, mTurkHIT.getHITId).toOptionLogging(logger)
       } yield (active += hit)
       active
     }
@@ -131,10 +131,9 @@ object HITManager {
           activeHITs += hit
           val newHITInfo = HITInfo[Prompt, Response](hit, Nil)
           activeHITInfosByPrompt.put(prompt, newHITInfo :: activeHITInfos(prompt))
-          println(s"Created HIT: ${hit.hitId}")
-          println(s"${service.getWebsiteURL}/mturk/preview?groupId=${hit.hitTypeId}")
+          logger.info(s"Created HIT: ${hit.hitId}\n${service.getWebsiteURL}/mturk/preview?groupId=${hit.hitTypeId}")
         case Failure(e) =>
-          System.err.println(e.getMessage)
+          logger.error(e.getMessage)
           e.printStackTrace
       }
       attempt
@@ -148,7 +147,7 @@ object HITManager {
     def finishHIT(hit: HIT[Prompt]): Unit = {
       service.disposeHIT(hit.hitId)
       if(!isActive(hit)) {
-        System.err.println(s"Trying to finish HIT that isn't active? $hit")
+        logger.error(s"Trying to finish HIT that isn't active? $hit")
       }
       activeHITs -= hit
       // add to other appropriate data structures
@@ -157,7 +156,7 @@ object HITManager {
       val curInfo = activeData
         .find(_.hit.hitId == hit.hitId)
         .getOrElse {
-        System.err.println("Warning: could not find active HIT to move to finished");
+        logger.error("Could not find active HIT to move to finished");
         HITInfo(
           hit,
           hitDataService.getAssignmentsForHIT[Response](hitTypeId, hit.hitId).get)
@@ -198,31 +197,25 @@ object HITManager {
           val curData = activeHITInfos(hit.prompt)
           val curInfo = curData.find(_.hit.hitId == hit.hitId)
             .getOrElse {
-            System.err.println(s"Could not find active data for hit $hit")
+            logger.error(s"Could not find active data for hit $hit")
             HITInfo[Prompt, Response](hit, Nil)
           }
           val filteredData = curData.filterNot(_.hit.hitId == hit.hitId)
           val newInfo = curInfo.copy(assignments = assignment :: curInfo.assignments)
           activeHITInfosByPrompt.put(hit.prompt, newInfo :: filteredData)
-          println
-          println(s"Approved assignment for worker ${assignment.workerId}: ${assignment.assignmentId}")
-          println(s"HIT for approved assignment: ${assignment.hitId}; $hitTypeId")
+          logger.info(s"Approved assignment for worker ${assignment.workerId}: ${assignment.assignmentId}\n" +
+                        s"HIT for approved assignment: ${assignment.hitId}; $hitTypeId")
           hitDataService.saveApprovedAssignment(assignment).recover { case e =>
-            e.printStackTrace
-            System.err.println(s"Failed to save approved assignment; data:")
-            System.err.println(write(assignment))
+            logger.error(s"Failed to save approved assignment; data:\n${write(assignment)}")
         }
         case Rejection(message) =>
           service.rejectAssignment(assignment.assignmentId, message)
           assignmentsInReview -= aInRev
-          println
-          println(s"Rejected assignment: ${assignment.assignmentId}")
-          println(s"HIT for rejected assignment: ${assignment.hitId}; $hitTypeId")
-          println(s"Reason: $message")
+          logger.info(s"Rejected assignment: ${assignment.assignmentId}\n" +
+                        s"HIT for rejected assignment: ${assignment.hitId}; ${hitTypeId}\n" +
+                        s"Reason: $message")
           hitDataService.saveRejectedAssignment(assignment) recover { case e =>
-            e.printStackTrace
-            System.err.println(s"Failed to save approved assignment; data:")
-            System.err.println(write(assignment))
+            logger.error(s"Failed to save approved assignment; data:\n${write(assignment)}")
           }
       }
     }

@@ -22,10 +22,12 @@ import akka.stream.scaladsl._
 
 import upickle.default._
 
+import com.typesafe.scalalogging.StrictLogging
+
 class Webservice(
   tasks: List[TaskSpecification])(
   implicit fm: Materializer,
-  config: TaskConfig) extends Directives {
+  config: TaskConfig) extends Directives with StrictLogging {
   // TODO verify that we're getting a JS file. don't just serve anything they ask for
 
   // assume keys are unique
@@ -56,7 +58,7 @@ class Webservice(
     val taskOpt = taskIndex.get(taskKey)
     taskOpt match {
       case None =>
-        System.err.println(s"Got API request for task $taskKey which matches no task")
+        logger.warn(s"Got API request for task $taskKey which matches no task")
         Flow[Message].filter(_ => false)
       case Some(taskSpec) =>
         import taskSpec._ // to get ApiRequest and ApiResponse types and serialization objects

@@ -27,8 +27,8 @@ lazy val turkey = crossProject.settings(
     "com.typesafe.akka" %% "akka-actor" % "2.4.8",
     "com.typesafe.akka" %% "akka-http-experimental" % "2.4.9",
     "com.jsuereth" % "scala-arm_2.11" % "2.0-RC1",
+    "com.typesafe.scala-logging" %% "scala-logging" % "3.5.0",
     // java deps:
-    "log4j" % "log4j" % "1.2.17",
     "net.ettinsmoor" % "java-aws-mturk" % "1.6.2"
       exclude("org.apache.commons","not-yet-commons-ssl")
       exclude("apache-xerces","xercesImpl")
@@ -60,7 +60,6 @@ lazy val turkeySample = crossProject.in(file("sample")).settings(
   name := "turkey-sample",
   organization := "com.github.julianmichael",
   version := "0.1-SNAPSHOT",
-  // scalaOrganization in ThisBuild := "org.typelevel", // for fixing stupid serialization woes
   scalaVersion in ThisBuild := "2.11.8",
   scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked"),
   resolvers += Resolver.sonatypeRepo("snapshots"),
@@ -73,20 +72,10 @@ lazy val turkeySample = crossProject.in(file("sample")).settings(
 ).jvmSettings(
   fork in console := true,
   libraryDependencies ++= Seq(
-    // TODO eventually switch to this if necessary
-    // "com.github.pathikrit" % "better-files_2.11" % "2.16.0",
     "com.typesafe.akka" %% "akka-actor" % "2.4.8",
     "com.typesafe.akka" %% "akka-http-experimental" % "2.4.9",
     // java deps:
-    "log4j" % "log4j" % "1.2.17",
-    "net.ettinsmoor" % "java-aws-mturk" % "1.6.2"
-      exclude("org.apache.commons","not-yet-commons-ssl")
-      exclude("apache-xerces","xercesImpl")
-      exclude("apache-xerces","resolver")
-      exclude("apache-xerces","xml-apis"),
-    "ca.juliusdavies" % "not-yet-commons-ssl" % "0.3.11",
-    "xerces" % "xercesImpl" % "2.9.1"
-  )
+    "ch.qos.logback" % "logback-classic" % "1.2.3")
 ).jsSettings(
   addCompilerPlugin("org.scalamacros" %% "paradise" % "2.1.0" cross CrossVersion.full),
   libraryDependencies ++= Seq(

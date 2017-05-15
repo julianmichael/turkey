@@ -13,6 +13,8 @@ import akka.actor.ActorRef
 import com.amazonaws.mturk.requester.AssignmentStatus
 import com.amazonaws.mturk.requester.HITStatus
 
+import com.typesafe.scalalogging.StrictLogging
+
 case class SetNumHITsActive(value: Int)
 
 object NumAssignmentsHITManager {
@@ -27,7 +29,7 @@ class NumAssignmentsHITManager[Prompt, Response](
   helper: HITManager.Helper[Prompt, Response],
   numAssignmentsForPrompt: Prompt => Int,
   initNumHITsToKeepActive: Int,
-  _promptSource: Iterator[Prompt]) extends HITManager[Prompt, Response](helper) {
+  _promptSource: Iterator[Prompt]) extends HITManager[Prompt, Response](helper) with StrictLogging {
 
   var numHITsToKeepActive: Int = initNumHITsToKeepActive
 
@@ -46,7 +48,7 @@ class NumAssignmentsHITManager[Prompt, Response](
   def reviewAssignment(hit: HIT[Prompt], assignment: Assignment[Response]): Unit = {
     evaluateAssignment(hit, startReviewing(assignment), Approval(""))
     if(!assignment.feedback.isEmpty) {
-      println(s"Feedback: ${assignment.feedback}")
+      logger.info(s"Feedback: ${assignment.feedback}")
     }
   }
 
@@ -65,9 +67,9 @@ class NumAssignmentsHITManager[Prompt, Response](
 
   final override def reviewHITs: Unit = {
     for {
-      allMTurkHITs <- Try(service.searchAllHITs()).toOptionPrinting.toList
+      allMTurkHITs <- Try(service.searchAllHITs()).toOptionLogging(logger).toList
       mTurkHIT <- allMTurkHITs.filter(_.getHITTypeId() == hitTypeId)
-      hit <- hitDataService.getHIT[Prompt](hitTypeId, mTurkHIT.getHITId).toOptionPrinting
+      hit <- hitDataService.getHIT[Prompt](hitTypeId, mTurkHIT.getHITId).toOptionLogging(logger)
     } yield {
       val submittedAssignments = service.getAllAssignmentsForHIT(hit.hitId, Array(AssignmentStatus.Submitted))
       // review all submitted assignments (that are not currently in review)
@@ -79,8 +81,7 @@ class NumAssignmentsHITManager[Prompt, Response](
             reviewAssignment(hit, assignment)
           }
           case Failure(e) =>
-            System.err.println("Error parsing assignment:")
-            e.printStackTrace
+            logger.error(s"Error parsing assignment: ${e.getMessage}; assignment:\n$a")
             service.approveAssignment(
               a.getAssignmentId,
               "There was an error in parsing your response to the HIT. Please notify the requester.")

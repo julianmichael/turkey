@@ -14,7 +14,9 @@ import com.typesafe.sslconfig.akka.AkkaSSLConfig
 
 import scala.util.{Try, Success, Failure}
 
-class Server(tasks: List[TaskSpecification])(implicit config: TaskConfig) {
+import com.typesafe.scalalogging.StrictLogging
+
+class Server(tasks: List[TaskSpecification])(implicit config: TaskConfig) extends StrictLogging {
   import config._
   implicit val system: ActorSystem = actorSystem
   implicit val materializer: Materializer = ActorMaterializer()
@@ -26,9 +28,9 @@ class Server(tasks: List[TaskSpecification])(implicit config: TaskConfig) {
   httpBinding.onComplete {
     case Success(binding) ⇒
       val localAddress = binding.localAddress
-      println(s"Server is listening on http://${localAddress.getHostName}:${localAddress.getPort}")
+      logger.info(s"Server is listening on http://${localAddress.getHostName}:${localAddress.getPort}")
     case Failure(e) ⇒
-      println(s"HTTP binding failed: $e")
+      logger.error(s"HTTP binding failed: $e")
   }
 
   val httpsServer = Try {
@@ -59,15 +61,15 @@ class Server(tasks: List[TaskSpecification])(implicit config: TaskConfig) {
     httpsBinding.onComplete {
       case Success(binding) ⇒
         val localAddress = binding.localAddress
-        println(s"Server is listening on https://${localAddress.getHostName}:${localAddress.getPort}")
+        logger.info(s"Server is listening on https://${localAddress.getHostName}:${localAddress.getPort}")
       case Failure(e) ⇒
-        println(s"HTTPS binding failed: $e")
+        logger.warn(s"HTTPS binding failed: $e")
     }
   }
 
   httpsServer match {
     case Success(_) => ()
     case Failure(e) =>
-      System.err.println(s"HTTPS configuration failed: $e")
+      logger.warn(s"HTTPS configuration failed: $e")
   }
 }

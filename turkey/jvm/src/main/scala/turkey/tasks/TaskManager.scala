@@ -14,12 +14,14 @@ import akka.actor.Cancellable
 import upickle.default.Writer
 import upickle.default.Reader
 
+import com.typesafe.scalalogging.StrictLogging
+
 // back in time for old docs
 // NOTE the hit manager needs to have the right type params ^
 class TaskManager[Prompt, Response](
   hitManagementHelper: HITManager.Helper[Prompt, Response],
   hitManager: ActorRef
-) extends Actor {
+) extends Actor with StrictLogging {
 
   import TaskManager._
   import hitManagementHelper.Message._
@@ -56,9 +58,7 @@ class TaskManager[Prompt, Response](
       .filter(hit => hit.getHITTypeId().equals(hitTypeId))
       .foreach(hit => {
                  service.forceExpireHIT(hit.getHITId())
-                 println
-                 println(s"Expired HIT: ${hit.getHITId()}")
-                 println(s"HIT type for expired HIT: ${hitTypeId}")
+                 logger.info(s"Expired HIT: ${hit.getHITId()}\nHIT type for expired HIT: ${hitTypeId}")
                })
   }
 
@@ -72,8 +72,7 @@ class TaskManager[Prompt, Response](
 
   // review assignments, dispose of completed HITs, and upload new HITs
   private[this] def update: Unit = {
-    println
-    println(s"Updating (${hitTypeId})...")
+    logger.info(s"Updating (${hitTypeId})...")
     hitManager ! ReviewHITs
     hitManager ! ReviewHITs
   }

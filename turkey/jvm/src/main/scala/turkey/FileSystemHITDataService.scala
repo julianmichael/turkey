@@ -16,6 +16,8 @@ import upickle.default.read
 import resource.managed
 import resource.ManagedResource
 
+import com.typesafe.scalalogging.StrictLogging
+
 // Works for now; ideally would be implemented against a database.
 // buuuuut we don't really need to worry about data races; it's write-only.
 // database could be helpful when working with a huge dataset though.
@@ -23,7 +25,7 @@ import resource.ManagedResource
 // problem with that is that the TaskConfig object currently takes one of these as an argument
 // so that needs to be decided before the TaskConfig object is created
 // (which is where we generally make the sandbox/production distinction)
-class FileSystemHITDataService(root: Path, isProduction: Boolean) extends HITDataService {
+class FileSystemHITDataService(root: Path) extends HITDataService with StrictLogging {
 
   // == Basic auxiliary methods ==
 
@@ -52,11 +54,10 @@ class FileSystemHITDataService(root: Path, isProduction: Boolean) extends HITDat
   // Convenience methods to get file paths and create missing directories if necessary.
 
   private[this] def getRootPath: Path = {
-    val path = root.resolve(if(isProduction) "production" else "sandbox")
-    if(!Files.exists(path)) {
-      Files.createDirectories(path);
+    if(!Files.exists(root)) {
+      Files.createDirectories(root);
     }
-    path
+    root
   }
 
   private[this] def getHITTypePath(hitTypeId: String): Path = {
@@ -135,8 +136,8 @@ class FileSystemHITDataService(root: Path, isProduction: Boolean) extends HITDat
     val allData = for {
       hitFolder <- new java.io.File(getHITTypePath(hitTypeId).toString).listFiles
       if hitFolder.isDirectory // exclude extraneous files if necessary --- shouldn't happen though
-      hit <- Try(loadHITUnsafe[Prompt](Paths.get(hitFolder.getPath))).toOptionPrinting.toList
-      assignments <- getAssignmentsForHIT[Response](hit.hitTypeId, hit.hitId).toOptionPrinting.toList
+      hit <- Try(loadHITUnsafe[Prompt](Paths.get(hitFolder.getPath))).toOptionLogging(logger).toList
+      assignments <- getAssignmentsForHIT[Response](hit.hitTypeId, hit.hitId).toOptionLogging(logger).toList
     } yield HITInfo(hit, assignments)
     allData.toList
   }
@@ -150,7 +151,7 @@ class FileSystemHITDataService(root: Path, isProduction: Boolean) extends HITDat
       file <- new java.io.File(hitPath.toString).listFiles
       if !file.isDirectory // exclude rejection directory
       if !file.getPath.toString.endsWith(hitFilename.toString) // exclude hit.txt
-      assignment <- loadSerialized[Assignment[Response]](Paths.get(file.getPath)).toOptionPrinting.toList
+      assignment <- loadSerialized[Assignment[Response]](Paths.get(file.getPath)).toOptionLogging(logger).toList
     } yield assignment
     assignments.toList
   }
