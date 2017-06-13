@@ -9,7 +9,7 @@ lazy val root = project.in(file("."))
 
 lazy val turkey = crossProject.settings(
   name := "turkey",
-  organization := "org.me", // TODO: com.github.uwnlp?
+  organization := "com.github.julianmichael",
   version := "0.1-SNAPSHOT",
   scalaOrganization in ThisBuild := "org.typelevel", // for fixing stupid serialization woes
   scalaVersion in ThisBuild := "2.11.8",

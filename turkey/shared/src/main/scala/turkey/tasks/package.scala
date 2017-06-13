@@ -9,7 +9,7 @@ package turkey
   * [[mts.tasks.DataManager]] coordinates which data is uploaded to MTurk as questions
   * and handles pre/post-processing of the data.
   */
-package object tasks extends PackagePlatformExtensions {
+package object tasks {
   sealed trait HeartbeatingWebSocketMessage[+A]
   case object Heartbeat extends HeartbeatingWebSocketMessage[Nothing]
   case class WebSocketMessage[A](content: A) extends HeartbeatingWebSocketMessage[A]
