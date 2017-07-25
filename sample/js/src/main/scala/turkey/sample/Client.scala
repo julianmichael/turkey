@@ -21,6 +21,7 @@ import monocle._
 import monocle.macros._
 import japgolly.scalajs.react.MonocleReact._
 
+/** Sample client built using React. */
 object Client extends TaskClient[SamplePrompt, SampleResponse] {
 
   sealed trait State
@@ -46,7 +47,7 @@ object Client extends TaskClient[SamplePrompt, SampleResponse] {
           scope.setState(Loading("Retrieving data")).runNow
           socket.send(
             write[HeartbeatingWebSocketMessage[ApiRequest]](
-              WebSocketMessage(SentenceRequest(prompt.id))))
+              WebSocketMessage(SentenceRequest(prompt.sentence))))
         }
         socket.onerror = { (event: ErrorEvent) =>
           val msg = s"Connection failure. Error code: ${event.colno}"

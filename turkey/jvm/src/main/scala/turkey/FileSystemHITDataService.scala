@@ -18,13 +18,10 @@ import resource.ManagedResource
 
 import com.typesafe.scalalogging.StrictLogging
 
-// Works for now; ideally would be implemented against a database.
-// buuuuut we don't really need to worry about data races; it's write-only.
-// database could be helpful when working with a huge dataset though.
-// also could potentially refactor things so this doesn't need to be aware of sandbox/production;
-// problem with that is that the TaskConfig object currently takes one of these as an argument
-// so that needs to be decided before the TaskConfig object is created
-// (which is where we generally make the sandbox/production distinction)
+/** Implementation of HITDataService against the file system.
+  * Works for most purposes; would be better to have an implementation against a database
+  * for a really big project.
+  */
 class FileSystemHITDataService(root: Path) extends HITDataService with StrictLogging {
 
   // == Basic auxiliary methods ==

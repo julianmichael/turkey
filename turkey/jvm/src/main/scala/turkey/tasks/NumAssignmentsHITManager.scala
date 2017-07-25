@@ -25,6 +25,10 @@ object NumAssignmentsHITManager {
     _promptSource: Iterator[Prompt]) = new NumAssignmentsHITManager[Prompt, Response](
     helper, _ => numAssignmentsPerPrompt, initNumHITsToKeepActive, _promptSource)
 }
+
+/** Simplest HIT manager, which gets a fixed number of assignments for every prompt
+  * and approves all assignments immediately.
+  */
 class NumAssignmentsHITManager[Prompt, Response](
   helper: HITManager.Helper[Prompt, Response],
   numAssignmentsForPrompt: Prompt => Int,
@@ -33,6 +37,7 @@ class NumAssignmentsHITManager[Prompt, Response](
 
   var numHITsToKeepActive: Int = initNumHITsToKeepActive
 
+  /** Override to add more possible incoming message types and message-processing logic. */
   def receiveAux2: PartialFunction[Any, Unit] =
     PartialFunction.empty[Any, Unit]
 
@@ -40,13 +45,13 @@ class NumAssignmentsHITManager[Prompt, Response](
     { case SetNumHITsActive(n) => numHITsToKeepActive = n }: PartialFunction[Any, Unit]
   ) orElse receiveAux2
 
-  import helper._
-  import config._
-  import taskSpec.hitTypeId
+  import helper.config
+  import helper.taskSpec.hitTypeId
+  import helper.promptReader
 
   // override for more interesting review policy
   def reviewAssignment(hit: HIT[Prompt], assignment: Assignment[Response]): Unit = {
-    evaluateAssignment(hit, startReviewing(assignment), Approval(""))
+    helper.evaluateAssignment(hit, helper.startReviewing(assignment), Approval(""))
     if(!assignment.feedback.isEmpty) {
       logger.info(s"Feedback: ${assignment.feedback}")
     }
@@ -63,33 +68,33 @@ class NumAssignmentsHITManager[Prompt, Response](
   val queuedPrompts = new LazyStackQueue[Prompt](_promptSource)
 
   def isFinished(prompt: Prompt) =
-    finishedHITInfos(prompt).map(_.assignments.size).sum >= numAssignmentsForPrompt(prompt)
+    helper.finishedHITInfos(prompt).map(_.assignments.size).sum >= numAssignmentsForPrompt(prompt)
 
   final override def reviewHITs: Unit = {
     for {
-      allMTurkHITs <- Try(service.searchAllHITs()).toOptionLogging(logger).toList
+      allMTurkHITs <- Try(config.service.searchAllHITs()).toOptionLogging(logger).toList
       mTurkHIT <- allMTurkHITs.filter(_.getHITTypeId() == hitTypeId)
-      hit <- hitDataService.getHIT[Prompt](hitTypeId, mTurkHIT.getHITId).toOptionLogging(logger)
+      hit <- config.hitDataService.getHIT[Prompt](hitTypeId, mTurkHIT.getHITId).toOptionLogging(logger)
     } yield {
-      val submittedAssignments = service.getAllAssignmentsForHIT(hit.hitId, Array(AssignmentStatus.Submitted))
+      val submittedAssignments = config.service.getAllAssignmentsForHIT(hit.hitId, Array(AssignmentStatus.Submitted))
       // review all submitted assignments (that are not currently in review)
       for(a <- submittedAssignments) {
-        val assignmentTry = Try(taskSpec.makeAssignment(hit.hitId, a))
+        val assignmentTry = Try(helper.taskSpec.makeAssignment(hit.hitId, a))
 
         assignmentTry match {
-          case Success(assignment) => if(isInReview(assignment).isEmpty) {
+          case Success(assignment) => if(helper.isInReview(assignment).isEmpty) {
             reviewAssignment(hit, assignment)
           }
           case Failure(e) =>
             logger.error(s"Error parsing assignment: ${e.getMessage}; assignment:\n$a")
-            service.approveAssignment(
+            config.service.approveAssignment(
               a.getAssignmentId,
               "There was an error in parsing your response to the HIT. Please notify the requester.")
         }
       }
       // if the HIT is "reviewable", and all its assignments are reviewed (i.e., no longer "Submitted"), we can dispose
       if(mTurkHIT.getHITStatus == HITStatus.Reviewable && submittedAssignments.isEmpty) {
-        finishHIT(hit)
+        helper.finishHIT(hit)
         if(isFinished(hit.prompt)) {
           promptFinished(hit.prompt)
         }
@@ -97,16 +102,16 @@ class NumAssignmentsHITManager[Prompt, Response](
     }
 
     // refresh: upload new hits to fill gaps
-    val numToUpload = numHITsToKeepActive - numActiveHITs
+    val numToUpload = numHITsToKeepActive - helper.numActiveHITs
     for(_ <- 1 to numToUpload) {
       queuedPrompts.filterPop(p => !isFinished(p)) match {
         case None => () // we're finishing off, woo
         case Some(nextPrompt) =>
-          if(isActive(nextPrompt)) {
+          if(helper.isActive(nextPrompt)) {
             // if this prompt is already active, queue it for later
             // TODO probably want to delay it by a constant factor instead
             queuedPrompts.enqueue(nextPrompt)
-          } else createHIT(nextPrompt, numAssignmentsForPrompt(nextPrompt)) recover {
+          } else helper.createHIT(nextPrompt, numAssignmentsForPrompt(nextPrompt)) recover {
             case _ => queuedPrompts.enqueue(nextPrompt) // put it back at the bottom to try later
           }
       }

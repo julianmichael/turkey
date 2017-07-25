@@ -16,34 +16,37 @@ import upickle.default._
 
 import com.typesafe.scalalogging.StrictLogging
 
-// TODO get rid of reviewy complexity and stuff; just implement next task's logic
 abstract class HITManager[Prompt, Response](
   helper: HITManager.Helper[Prompt, Response]
 ) extends Actor {
 
   import helper.Message._
-  import helper._
 
   final override def receive = receiveHelperMessage orElse receiveAux
 
+  // delegates to helper when given a standard message defined in the helper
   private[this] final val receiveHelperMessage: PartialFunction[Any, Unit] = {
-    case DisableAll => disableAll
+    case DisableAll => helper.disableAll
     case ReviewHITs => reviewHITs
     case AddPrompt(p) => addPrompt(p)
   }
 
-  // can override if you want to process more kinds of messages
+  /** Override to add more incoming message types and message-processing logic */
   def receiveAux: PartialFunction[Any, Unit] =
     PartialFunction.empty[Any, Unit]
 
+  /** Queries Turk and refreshes the task state, sending assignments for approval/validation,
+    * approving/rejecting them, disposing HITs, etc. as necessary */
   def reviewHITs: Unit
+
+  /** Adds a prompt to the set of prompts that this HITManager should be responsible for sourcing responses for. */
   def addPrompt(prompt: Prompt): Unit
 }
 
-// TODO is there some way of restricting access to the methods here
-// so they aren't public but they are accessible by subclasses of HITManager?
-// protected[HITManager] does not work.
 object HITManager {
+  /** Manages the ongoing state for a task with a particular HIT type;
+    * keeps track of HITs and assignments that are active, saved, etc.
+    * and gives convenience methods for interfacing with Turk. */
   class Helper[P, R](
     val taskSpec: TaskSpecification { type Prompt = P ; type Response = R })(
     implicit val promptReader: Reader[P],
@@ -63,7 +66,6 @@ object HITManager {
       case class AddPrompt(prompt: Prompt) extends Message
     }
     import Message._
-    import config._
     import taskSpec.hitTypeId
 
     // disable method, not really complete yet
@@ -74,30 +76,33 @@ object HITManager {
       // NOTE the above is an old todo. not sure if I still want to do it. not taking the time to think about it
       // TODO XXX integrate this with helper state. as of now weird things prob will happen
       // so you need to restart any time you disable. fortunately you probably want to anyway...
-      service.searchAllHITs()
+      config.service.searchAllHITs()
         .filter(hit => hit.getHITTypeId().equals(hitTypeId))
         .foreach(hit => {
-                   service.disableHIT(hit.getHITId())
+                   config.service.disableHIT(hit.getHITId())
                    logger.info(s"Disabled HIT: ${hit.getHITId()}\nHIT type for disabled HIT: ${hitTypeId}")
                  })
     }
 
     // HITs Active stuff
 
+    // active HITs are currently up on Turk
     private[this] val activeHITs = {
       val active = mutable.Set.empty[HIT[Prompt]]
       for {
         mTurkHIT <- config.service.searchAllHITs
         if mTurkHIT.getHITTypeId.equals(hitTypeId)
-        hit <- hitDataService.getHIT[Prompt](hitTypeId, mTurkHIT.getHITId).toOptionLogging(logger)
+        hit <- config.hitDataService.getHIT[Prompt](hitTypeId, mTurkHIT.getHITId).toOptionLogging(logger)
       } yield (active += hit)
       active
     }
 
+    // finished means the HIT is not on turk (i.e., all assignments are done)
+    // active includes HITs for which some assignments are done and some are not
     private[this] val (finishedHITInfosByPrompt, activeHITInfosByPrompt) = {
       val finishedRes = mutable.Map.empty[Prompt, List[HITInfo[Prompt, Response]]]
       val activeRes = mutable.Map.empty[Prompt, List[HITInfo[Prompt, Response]]]
-      hitDataService.getAllHITInfo[Prompt, Response](hitTypeId).get
+      config.hitDataService.getAllHITInfo[Prompt, Response](hitTypeId).get
         .groupBy(_.hit.prompt)
         .foreach { case (prompt, infos) =>
           infos.foreach { hitInfo =>
@@ -124,6 +129,9 @@ object HITManager {
     def allCurrentHITInfos(p: Prompt): List[HITInfo[Prompt, Response]] =
       activeHITInfos(p) ++ finishedHITInfos(p)
 
+    /** Create a HIT with the specific parameters.
+      * This should be used in order to ensure the helper has a consistent state.
+      */
     def createHIT(prompt: Prompt, numAssignments: Int): Try[HIT[Prompt]] = {
       val attempt = taskSpec.createHIT(prompt, numAssignments)
       attempt match {
@@ -131,7 +139,7 @@ object HITManager {
           activeHITs += hit
           val newHITInfo = HITInfo[Prompt, Response](hit, Nil)
           activeHITInfosByPrompt.put(prompt, newHITInfo :: activeHITInfos(prompt))
-          logger.info(s"Created HIT: ${hit.hitId}\n${service.getWebsiteURL}/mturk/preview?groupId=${hit.hitTypeId}")
+          logger.info(s"Created HIT: ${hit.hitId}\n${config.service.getWebsiteURL}/mturk/preview?groupId=${hit.hitTypeId}")
         case Failure(e) =>
           logger.error(e.getMessage)
           e.printStackTrace
@@ -144,8 +152,11 @@ object HITManager {
     def isActive(hitId: String): Boolean = activeHITs.exists(_.hitId == hitId)
     def numActiveHITs = activeHITs.size
 
+    /** Disposes of a disposable HIT and takes care of bookkeeping.
+      * Assumes the HIT is disposable.
+      */
     def finishHIT(hit: HIT[Prompt]): Unit = {
-      service.disposeHIT(hit.hitId)
+      config.service.disposeHIT(hit.hitId)
       if(!isActive(hit)) {
         logger.error(s"Trying to finish HIT that isn't active? $hit")
       }
@@ -159,7 +170,7 @@ object HITManager {
         logger.error("Could not find active HIT to move to finished");
         HITInfo(
           hit,
-          hitDataService.getAssignmentsForHIT[Response](hitTypeId, hit.hitId).get)
+          config.hitDataService.getAssignmentsForHIT[Response](hitTypeId, hit.hitId).get)
       }
       val newActiveData = activeData.filterNot(_.hit.hitId == hit.hitId)
       val newFinishedData = curInfo :: finishedData
@@ -169,6 +180,7 @@ object HITManager {
 
     // Assignment reviewing
 
+    /** Represents an assignment waiting for a reviewing result. */
     class AssignmentInReview protected[Helper] (val assignment: Assignment[Response])
 
     private[this] val assignmentsInReview = mutable.Set.empty[AssignmentInReview]
@@ -179,11 +191,14 @@ object HITManager {
       assignmentsInReview.find(_.assignment.assignmentId == assignmentId)
     def numAssignmentsInReview = assignmentsInReview.size
 
+    /** Mark an assignment as under review. */
     def startReviewing(assignment: Assignment[Response]): AssignmentInReview = {
       val aInRev = new AssignmentInReview(assignment)
       assignmentsInReview += aInRev
       aInRev
     }
+
+    /** Process and record the result of reviewing an assignment. */
     def evaluateAssignment(
       hit: HIT[Prompt],
       aInRev: AssignmentInReview,
@@ -192,7 +207,7 @@ object HITManager {
       import aInRev.assignment
       evaluation match {
         case Approval(message) =>
-          service.approveAssignment(assignment.assignmentId, message)
+          config.service.approveAssignment(assignment.assignmentId, message)
           assignmentsInReview -= aInRev
           val curData = activeHITInfos(hit.prompt)
           val curInfo = curData.find(_.hit.hitId == hit.hitId)
@@ -205,16 +220,16 @@ object HITManager {
           activeHITInfosByPrompt.put(hit.prompt, newInfo :: filteredData)
           logger.info(s"Approved assignment for worker ${assignment.workerId}: ${assignment.assignmentId}\n" +
                         s"HIT for approved assignment: ${assignment.hitId}; $hitTypeId")
-          hitDataService.saveApprovedAssignment(assignment).recover { case e =>
+          config.hitDataService.saveApprovedAssignment(assignment).recover { case e =>
             logger.error(s"Failed to save approved assignment; data:\n${write(assignment)}")
         }
         case Rejection(message) =>
-          service.rejectAssignment(assignment.assignmentId, message)
+          config.service.rejectAssignment(assignment.assignmentId, message)
           assignmentsInReview -= aInRev
           logger.info(s"Rejected assignment: ${assignment.assignmentId}\n" +
                         s"HIT for rejected assignment: ${assignment.hitId}; ${hitTypeId}\n" +
                         s"Reason: $message")
-          hitDataService.saveRejectedAssignment(assignment) recover { case e =>
+          config.hitDataService.saveRejectedAssignment(assignment) recover { case e =>
             logger.error(s"Failed to save approved assignment; data:\n${write(assignment)}")
           }
       }

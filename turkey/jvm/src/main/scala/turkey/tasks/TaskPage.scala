@@ -4,8 +4,9 @@ package tasks
 import scalatags.Text.all._
 import upickle.default._
 
-/** Contains the general HTML template for tasks. */
+/** Contains the general HTML template for all tasks. */
 object TaskPage {
+  /** Constructs the HTML page for a given prompt and a given task. */
   def htmlPage[Prompt : Writer](
     prompt: Prompt,
     taskSpec: TaskSpecification,

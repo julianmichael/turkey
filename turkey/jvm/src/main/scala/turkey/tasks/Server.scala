@@ -16,15 +16,23 @@ import scala.util.{Try, Success, Failure}
 
 import com.typesafe.scalalogging.StrictLogging
 
+/** Takes a list of `TaskSpecification`s and hosts an HTTP server that can serve them all concurrently.
+  * Requires a file `application.conf` in your resources folder with requisite fields defining the interface
+  * and ports (see the file in the sample project for reference).
+  * For testing, HTTP is fine, but if you want to run on MTurk, you need HTTPS to work.
+  * For this, you need (also in your resources folder) a globally trusted SSL certificate,
+  * a PKCS12-formatted keystore named `<domain>.p12`, a password named `<domain>-keystore-password`.
+  *
+  * Starts upon construction.
+  */
 class Server(tasks: List[TaskSpecification])(implicit config: TaskConfig) extends StrictLogging {
-  import config._
-  implicit val system: ActorSystem = actorSystem
+  implicit val system: ActorSystem = config.actorSystem
   implicit val materializer: Materializer = ActorMaterializer()
   import system.dispatcher
 
   val service = new Webservice(tasks)
 
-  val httpBinding = Http().bindAndHandle(service.route, interface, httpPort)
+  val httpBinding = Http().bindAndHandle(service.route, config.interface, config.httpPort)
   httpBinding.onComplete {
     case Success(binding) ⇒
       val localAddress = binding.localAddress
@@ -37,11 +45,11 @@ class Server(tasks: List[TaskSpecification])(implicit config: TaskConfig) extend
     // Manual HTTPS configuration
 
     val password: Array[Char] = new java.util.Scanner(
-      getClass.getClassLoader.getResourceAsStream(s"$serverDomain-keystore-password")
+      getClass.getClassLoader.getResourceAsStream(s"${config.serverDomain}-keystore-password")
     ).next.toCharArray
 
     val ks: KeyStore = KeyStore.getInstance("PKCS12")
-    val keystore: InputStream = getClass.getClassLoader.getResourceAsStream(s"$serverDomain.p12")
+    val keystore: InputStream = getClass.getClassLoader.getResourceAsStream(s"${config.serverDomain}.p12")
 
     require(keystore != null, "Keystore required!")
     ks.load(keystore, password)
@@ -57,7 +65,7 @@ class Server(tasks: List[TaskSpecification])(implicit config: TaskConfig) extend
 
     val https = ConnectionContext.https(sslContext)
 
-    val httpsBinding = Http().bindAndHandle(service.route, interface, httpsPort, connectionContext = https)
+    val httpsBinding = Http().bindAndHandle(service.route, config.interface, config.httpsPort, connectionContext = https)
     httpsBinding.onComplete {
       case Success(binding) ⇒
         val localAddress = binding.localAddress

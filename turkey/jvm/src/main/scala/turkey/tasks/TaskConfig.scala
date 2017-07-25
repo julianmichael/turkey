@@ -30,23 +30,16 @@ sealed trait TaskConfig {
     */
   val externalSubmitURL: String
 
-  /** Either "sandbox" or "production": used to segregate the saved data for each task
-    * between sandbox and production runs.
-    */
-  val label: String
-
-  /** Just for convenience in cases where, for example, we don't want to upload 100 HITs to the sandbox
-    * just for trying out a task; or, we want only 1 assignment per HIT in sandbox mode so we can test assignment approval.
-    */
+  /** Whether we are working in production as opposed to the sandbox. */
   val isProduction: Boolean
 
-  /** The ActorSystem we're using to manage tasks. */
+  /** The ActorSystem we're using to manage tasks and host the server. */
   val actorSystem: ActorSystem
 
   /** The domain at which we're hosting our server. */
   val serverDomain: String
 
-  /** The interface we're using to host the server. */
+  /** The interface (IP address) we're using to host the server. */
   val interface: String
 
   /** What port we're hosting HTTP at. */
@@ -58,8 +51,8 @@ sealed trait TaskConfig {
   /** Service for storing and getting finished HIT data */
   val hitDataService: HITDataService
 
-  /** Name of the project you're building your JS files with; used to determine what JS
-    * files the client asks for */
+  /** Name of the project we're building your JS files with; used to determine what JS
+    * files the client asks for. Needs to agree with the project name in your `build.sbt` */
   val projectName: String
 }
 
@@ -87,10 +80,9 @@ case class ProductionTaskConfig(
   config.setServiceURL(ClientConfig.PRODUCTION_SERVICE_URL)
   override val service = new RequesterService(config)
   override val externalSubmitURL = "https://www.mturk.com/mturk/externalSubmit"
-  override val label = "production"
   override val isProduction = true
 
-  override val actorSystem = ActorSystem(label)
+  override val actorSystem = ActorSystem("production")
   private[this] val akkaConfig = actorSystem.settings.config
   override val interface = akkaConfig.getString("app.interface")
   override val httpPort = akkaConfig.getInt("app.httpPort")
@@ -106,10 +98,9 @@ case class SandboxTaskConfig(
   config.setServiceURL(ClientConfig.SANDBOX_SERVICE_URL)
   override val service = new RequesterService(config)
   override val externalSubmitURL = "https://workersandbox.mturk.com/mturk/externalSubmit"
-  override val label = "sandbox"
   override val isProduction = false
 
-  override val actorSystem = ActorSystem(label)
+  override val actorSystem = ActorSystem("sandbox")
   private[this] val akkaConfig = actorSystem.settings.config
   override val interface = akkaConfig.getString("app.interface")
   override val httpPort = akkaConfig.getInt("app.httpPort")

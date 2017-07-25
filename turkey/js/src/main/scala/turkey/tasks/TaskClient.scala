@@ -7,6 +7,9 @@ import org.scalajs.dom
 
 import upickle.default._
 
+/** Superclass for an implementation of a client/interface for a turk task.
+  * Gives access by field to all of the information written into the `TaskPage` on the server.
+  */
 abstract class TaskClient[Prompt : Reader, Response : Writer] {
   import scala.scalajs.js.Dynamic.global
 
@@ -33,11 +36,6 @@ abstract class TaskClient[Prompt : Reader, Response : Writer] {
     read[Int](jQuery(s"#$httpsPortLabel").attr("value").get)
   }
 
-  def getWebsocketUri(document: dom.Document, nameOfChatParticipant: String): String = {
-    val wsProtocol = if (dom.document.location.protocol == "https:") "wss" else "ws"
-    s"$wsProtocol://${dom.document.location.host}/chat?name=$nameOfChatParticipant"
-  }
-
   lazy val websocketUri: String = {
     val isHttps = dom.document.location.protocol == "https:"
     val wsProtocol = if (isHttps) "wss" else "ws"
@@ -55,12 +53,6 @@ abstract class TaskClient[Prompt : Reader, Response : Writer] {
 
   def setResponse(response: Response): Unit = {
     jQuery(s"#$responseLabel").attr("value", write(response))
-  }
-
-  // XXX get rid of this; we now put submit button where desired with React
-  @Deprecated
-  def setSubmitEnabled(enable: Boolean): Unit = {
-    jQuery(s"#$submitButtonLabel").prop("disabled", !enable)
   }
 
   def main(): Unit

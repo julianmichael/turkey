@@ -7,6 +7,7 @@ import upickle.default._
 import collection.mutable
 
 // NOTE: not thread-safe
+/** Simple in-memory implementation of HITDataService for use in testing and sample tasks. */
 class InMemoryHITDataService extends HITDataService {
 
   case class HITStore(

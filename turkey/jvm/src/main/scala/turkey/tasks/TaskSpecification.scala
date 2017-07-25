@@ -32,10 +32,7 @@ import upickle.default._
   * It also has a method for converting from annotator responses (also XML strings)
   * into `Response`s.
   *
-  * To implement the logic of an actual task, the work is done in the client-side code.
-  *
-  * NOTE: As of now, we've not used qualification requirements and the code assumes there are none.
-  * If you wish to use qualification requirements it may require modifying the code; I don't know.
+  * To implement the actual logic & interface of a task, the work is done in the client-side code.
   *
   * @tparam Prompt
   * @tparam Response
@@ -57,9 +54,6 @@ sealed trait TaskSpecification {
   val samplePrompt: Prompt
   val frozenHITTypeId: Option[String]
 
-  import hitType._
-  import config._
-
   /** The HIT Type ID for this task.
     *
     * When this is accessed with a certain set of parameters for the first time,
@@ -70,7 +64,7 @@ sealed trait TaskSpecification {
     *
     * I'm not 100% sure this needs to be lazy... but it's not hurting anyone as it is.
     */
-  final lazy val hitTypeId = frozenHITTypeId.getOrElse(hitType.register(service))
+  final lazy val hitTypeId = frozenHITTypeId.getOrElse(hitType.register(config.service))
 
   /** Creates a HIT on MTurk.
     *
@@ -96,28 +90,28 @@ sealed trait TaskSpecification {
 
     for {
       mTurkHIT <- Try(
-        service.createHIT(
+        config.service.createHIT(
           hitTypeId,
-          title,
-          description,
-          keywords,
+          hitType.title,
+          hitType.description,
+          hitType.keywords,
           questionXML,
-          reward,
-          assignmentDuration,
-          autoApprovalDelay,
+          hitType.reward,
+          hitType.assignmentDuration,
+          hitType.autoApprovalDelay,
           lifetime,
           numAssignments,
           "", // don't bother with annotation---we don't get it back and it causes errors if >255 bytes (which was documented NOWHERE)
-          qualRequirements,
+          hitType.qualRequirements,
           Array("Minimal", "HITQuestion", "HITDetail"), // response groups --- these don't actually do anything :(
           uniqueRequestToken,
-          assignmentReviewPolicy,
-          hitReviewPolicy))
+          hitType.assignmentReviewPolicy,
+          hitType.hitReviewPolicy))
       hit = HIT(hitTypeId,
                 mTurkHIT.getHITId,
                 prompt,
                 mTurkHIT.getCreationTime.getTime.getTime)
-      _ <- hitDataService.saveHIT(hit)
+      _ <- config.hitDataService.saveHIT(hit)
     } yield hit
   }
 
@@ -137,10 +131,8 @@ sealed trait TaskSpecification {
 
   /** Extracts the annotator's feedback from an answer XML string.
     *
-    * The feedback field needs to be manually incorporated into the question's XML.
-    * In theory, the feedback could be incorporated into the Response data type,
-    * but since I always found myself wanting a feedback field anyway, this was vastly more convenient.
-    * (If you don't implement feedback, it just returns the empty string.)
+    * The feedback field needs to be manually included in the form on the client in order for this to work.
+    * (Otherwise, this just returns the empty string.)
     * Notes from the documentation for `extractResponse` apply here.
     *
     * @param answerXML the XML string received from the API
@@ -149,6 +141,12 @@ sealed trait TaskSpecification {
   final def extractFeedback(answerXML: String): String =
     getAnswers(answerXML).get(feedbackLabel).getOrElse("")
 
+  /** Makes an Assignment data structure corresponding to a completed assignment on MTurk.
+    * Does not save it to disk since it hasn't been reviewed yet.
+    * TODO: this should create some sort of "reviewable assignment" instead, which perhaps
+    * can be saved immediately to avoid possible problems, and which will help ensure everything
+    * gets reviewed as appropriate.
+    */
   final def makeAssignment(hitId: String, mTurkAssignment: MTurkAssignment): Assignment[Response] =
     Assignment(
       hitTypeId = hitTypeId,
