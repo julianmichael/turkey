@@ -1,6 +1,7 @@
 package turkey
 
-import com.amazonaws.mturk.service.axis.RequesterService
+// TODO: create a replacement for turk's QualificationRequirement
+// and move this and that to shared code
 import com.amazonaws.mturk.requester.QualificationRequirement
 
 /** Represents all of the fields necessary to produce a HIT type.
@@ -45,17 +46,4 @@ case class HITType(
   autoApprovalDelay: Long = 3600L, // seconds (1 hour)
   assignmentDuration: Long = 600L, // seconds (10 minutes)
   qualRequirements: Array[QualificationRequirement] = Array.empty[QualificationRequirement]
-) {
-  // really not gonna bother with Amazon's automatic review policies for anything
-  final val assignmentReviewPolicy = null
-  final val hitReviewPolicy = null
-
-  def register(service: RequesterService): String = service.registerHITType(
-    autoApprovalDelay,
-    assignmentDuration,
-    reward,
-    title,
-    keywords,
-    description,
-    qualRequirements)
-}
+)

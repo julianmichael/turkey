@@ -34,6 +34,8 @@ import upickle.default._
   *
   * To implement the actual logic & interface of a task, the work is done in the client-side code.
   *
+  * TaskSpecification is also responsible for holding HIT Type ID of its HIT Type.
+  *
   * @tparam Prompt
   * @tparam Response
   */
@@ -64,7 +66,16 @@ sealed trait TaskSpecification {
     *
     * I'm not 100% sure this needs to be lazy... but it's not hurting anyone as it is.
     */
-  final lazy val hitTypeId = frozenHITTypeId.getOrElse(hitType.register(config.service))
+  final lazy val hitTypeId = frozenHITTypeId.getOrElse(
+    config.service.registerHITType(
+      autoApprovalDelay,
+      assignmentDuration,
+      reward,
+      title,
+      keywords,
+      description,
+      qualRequirements)
+  )
 
   /** Creates a HIT on MTurk.
     *
@@ -105,8 +116,7 @@ sealed trait TaskSpecification {
           hitType.qualRequirements,
           Array("Minimal", "HITQuestion", "HITDetail"), // response groups --- these don't actually do anything :(
           uniqueRequestToken,
-          hitType.assignmentReviewPolicy,
-          hitType.hitReviewPolicy))
+          null, null)) // really not gonna bother with Amazon's automatic review policies for anything
       hit = HIT(hitTypeId,
                 mTurkHIT.getHITId,
                 prompt,
