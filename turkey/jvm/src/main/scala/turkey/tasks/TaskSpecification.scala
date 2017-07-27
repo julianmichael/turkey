@@ -68,13 +68,13 @@ sealed trait TaskSpecification {
     */
   final lazy val hitTypeId = frozenHITTypeId.getOrElse(
     config.service.registerHITType(
-      autoApprovalDelay,
-      assignmentDuration,
-      reward,
-      title,
-      keywords,
-      description,
-      qualRequirements)
+      hitType.autoApprovalDelay,
+      hitType.assignmentDuration,
+      hitType.reward,
+      hitType.title,
+      hitType.keywords,
+      hitType.description,
+      hitType.qualRequirements)
   )
 
   /** Creates a HIT on MTurk.
