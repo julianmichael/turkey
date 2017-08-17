@@ -12,7 +12,8 @@ object TaskPage {
     prompt: Prompt,
     taskSpec: TaskSpecification,
     useHttps: Boolean = true,
-    headTags: List[TypedTag[String]] = Nil)(
+    headTags: List[TypedTag[String]] = Nil,
+    bodyEndTags: List[TypedTag[String]] = Nil)(
     implicit config: TaskConfig) = {
     import config._
     val protocol = if(useHttps) "https:" else "http:"
@@ -86,7 +87,8 @@ object TaskPage {
             id := rootClientDivLabel,
             "Waiting for task data from server... (If this message does not disappear shortly, the server is down. Try refreshing in a minute or so.)"
           )
-        )
+        ),
+        bodyEndTags
       )
     )
   }
