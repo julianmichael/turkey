@@ -19,6 +19,8 @@ import scala.concurrent.duration._
 
 import akka.stream.scaladsl.Flow
 
+import scalatags.Text.TypedTag
+
 import upickle.default._
 
 /** Specifies a kind of task to run on MTurk.
@@ -55,6 +57,7 @@ sealed trait TaskSpecification {
   val apiFlow: Flow[ApiRequest, ApiResponse, Any]
   val samplePrompt: Prompt
   val frozenHITTypeId: Option[String]
+  val taskPageHeadElements: List[TypedTag[String]]
 
   /** The HIT Type ID for this task.
     *
@@ -207,7 +210,8 @@ object TaskSpecification {
     override val hitType: HITType,
     override val apiFlow: Flow[ApiReq, ApiResp, Any],
     override val samplePrompt: P,
-    override val frozenHITTypeId: Option[String])(
+    override val frozenHITTypeId: Option[String],
+    override val taskPageHeadElements: List[TypedTag[String]])(
     implicit override val promptWriter: Writer[P],
     val responseReader: Reader[R],
     val apiRequestReader: Reader[ApiReq],
@@ -224,11 +228,12 @@ object TaskSpecification {
     hitType: HITType,
     apiFlow: Flow[ApiReq, ApiResp, Any],
     samplePrompt: P,
-    frozenHITTypeId: Option[String] = None)(
+    frozenHITTypeId: Option[String] = None,
+    taskPageHeadElements: List[TypedTag[String]] = Nil)(
     implicit promptWriter: Writer[P],
     responseReader: Reader[R],
     apiRequestReader: Reader[ApiReq],
     apiResponseWriter: Writer[ApiResp],
     config: TaskConfig): TaskSpecification { type Prompt = P; type Response = R; type ApiRequest = ApiReq; type ApiResponse = ApiResp } =
-    TaskSpecificationImpl[P, R, ApiReq, ApiResp](taskKey, hitType, apiFlow, samplePrompt, frozenHITTypeId)
+    TaskSpecificationImpl[P, R, ApiReq, ApiResp](taskKey, hitType, apiFlow, samplePrompt, frozenHITTypeId, taskPageHeadElements)
 }
