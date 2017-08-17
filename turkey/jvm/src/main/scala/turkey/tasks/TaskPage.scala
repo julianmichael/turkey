@@ -37,11 +37,11 @@ object TaskPage {
         script(
           `type` := "text/javascript",
           src := s"$protocol//$serverDomain:$port/$projectName-launcher.js"),
+        headTags,
         link(
           rel := "stylesheet",
           `type` := "text/css",
-          href := s"$protocol//$serverDomain:$port/styles.css"),
-        headTags
+          href := s"$protocol//$serverDomain:$port/styles.css")
       ),
       body()(
         input(
