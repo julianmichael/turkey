@@ -198,7 +198,7 @@ sealed trait TaskSpecification {
       <?xml version="1.0" encoding="UTF-8"?>
       <HTMLQuestion xmlns="http://mechanicalturk.amazonaws.com/AWSMechanicalTurkDataSchemas/2011-11-11/HTMLQuestion.xsd">
         <HTMLContent><![CDATA[
-          <!DOCTYPE html>${TaskPage.htmlPage(prompt, this).render}
+          <!DOCTYPE html>${TaskPage.htmlPage(prompt, this, useHttps = true, headTags = taskPageHeadElements, bodyEndTags = taskPageBodyElements).render}
         ]]></HTMLContent>
         <FrameHeight>600</FrameHeight>
       </HTMLQuestion>

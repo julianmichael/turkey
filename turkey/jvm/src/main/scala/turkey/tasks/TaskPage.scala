@@ -12,8 +12,8 @@ object TaskPage {
     prompt: Prompt,
     taskSpec: TaskSpecification,
     useHttps: Boolean = true,
-    headTags: List[TypedTag[String]] = Nil,
-    bodyEndTags: List[TypedTag[String]] = Nil)(
+    headTags: List[TypedTag[String]],
+    bodyEndTags: List[TypedTag[String]])(
     implicit config: TaskConfig) = {
     import config._
     val protocol = if(useHttps) "https:" else "http:"

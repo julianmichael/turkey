@@ -48,7 +48,7 @@ class Webservice(
             taskIndex.get(taskKey) map { taskSpec =>
               HttpEntity(
                 ContentTypes.`text/html(UTF-8)`,
-                TaskPage.htmlPage(taskSpec.samplePrompt, taskSpec, useHttps = false)(taskSpec.promptWriter, config).render
+                TaskPage.htmlPage(taskSpec.samplePrompt, taskSpec, useHttps = false, headTags = taskSpec.taskPageHeadElements, bodyEndTags = taskSpec.taskPageBodyElements)(taskSpec.promptWriter, config).render
               )
             }
           }
