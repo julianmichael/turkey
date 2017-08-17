@@ -2,6 +2,7 @@ package turkey
 package tasks
 
 import scalatags.Text.all._
+import scalatags.Text.TypedTag
 import upickle.default._
 
 /** Contains the general HTML template for all tasks. */
@@ -10,7 +11,8 @@ object TaskPage {
   def htmlPage[Prompt : Writer](
     prompt: Prompt,
     taskSpec: TaskSpecification,
-    useHttps: Boolean = true)(
+    useHttps: Boolean = true,
+    headTags: List[TypedTag[String]] = Nil)(
     implicit config: TaskConfig) = {
     import config._
     val protocol = if(useHttps) "https:" else "http:"
@@ -33,7 +35,8 @@ object TaskPage {
         link(
           rel := "stylesheet",
           `type` := "text/css",
-          href := s"$protocol//$serverDomain:$port/styles.css")
+          href := s"$protocol//$serverDomain:$port/styles.css"),
+        headTags
       ),
       body()(
         input(
