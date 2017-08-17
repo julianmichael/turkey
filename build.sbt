@@ -17,7 +17,7 @@ lazy val turkey = crossProject.settings(
   resolvers += Resolver.sonatypeRepo("snapshots"),
   libraryDependencies ++= Seq(
     "com.lihaoyi" %%% "upickle" % "0.4.1",
-    "com.lihaoyi" %%% "scalatags" % "0.4.6",
+    "com.lihaoyi" %%% "scalatags" % "0.6.5",
     "com.softwaremill.macmemo" %% "macros" % "0.4-SNAPSHOT"
   ),
   addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)

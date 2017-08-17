@@ -20,6 +20,10 @@ object TaskPage {
     val port = if(useHttps) httpsPort else httpPort
     html(
       head(
+        meta(
+          name := "viewport",
+          content := "width=device-width, initial-scale=1, shrink-to-fit=no"
+        ),
         script(
           `type` := "text/javascript",
           src := "https://s3.amazonaws.com/mturk-public/externalHIT_v1.js"
