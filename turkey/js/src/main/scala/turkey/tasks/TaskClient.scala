@@ -20,6 +20,8 @@ abstract class TaskClient[Prompt : Reader, Response : Writer] {
 
   lazy val isNotAssigned = assignmentId == "ASSIGNMENT_ID_NOT_AVAILABLE"
 
+  import FieldLabels._
+
   lazy val taskKey: String = {
     read[String](jQuery(s"#$taskKeyLabel").attr("value").get)
   }

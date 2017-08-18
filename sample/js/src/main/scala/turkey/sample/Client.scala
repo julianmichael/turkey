@@ -96,7 +96,7 @@ object Client extends TaskClient[SamplePrompt, SampleResponse] {
               <.p(
                 <.input(
                   ^.`type` := "text",
-                  ^.name := feedbackLabel,
+                  ^.name := FieldLabels.feedbackLabel,
                   ^.placeholder := "Feedback? (Optional)",
                   ^.margin := "1px",
                   ^.padding := "1px",
@@ -106,7 +106,7 @@ object Client extends TaskClient[SamplePrompt, SampleResponse] {
               <.input(
                 ^.`type` := "submit",
                 ^.disabled := isNotAssigned,
-                ^.id := submitButtonLabel,
+                ^.id := FieldLabels.submitButtonLabel,
                 ^.value := "submit") 
             )
         }
@@ -122,7 +122,7 @@ object Client extends TaskClient[SamplePrompt, SampleResponse] {
     .build
 
   def main(): Unit = jQuery { () =>
-    ReactDOM.render(FullUI(), dom.document.getElementById(rootClientDivLabel))
+    ReactDOM.render(FullUI(), dom.document.getElementById(FieldLabels.rootClientDivLabel))
   }
 
   private[this] val instructions = <.div(

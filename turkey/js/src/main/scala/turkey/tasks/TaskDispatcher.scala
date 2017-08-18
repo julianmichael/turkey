@@ -18,7 +18,7 @@ trait TaskDispatcher {
   import scala.scalajs.js.Dynamic.global
 
   lazy val taskKey: String = {
-    read[String](jQuery(s"#$taskKeyLabel").attr("value").get)
+    read[String](jQuery(s"#${FieldLabels.taskKeyLabel}").attr("value").get)
   }
 
   final def main(): Unit = jQuery { () =>

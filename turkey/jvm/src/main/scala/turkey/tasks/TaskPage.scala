@@ -1,5 +1,4 @@
-package turkey
-package tasks
+package turkey.tasks
 
 import scalatags.Text.all._
 import scalatags.Text.TypedTag
@@ -15,9 +14,10 @@ object TaskPage {
     headTags: List[TypedTag[String]],
     bodyEndTags: List[TypedTag[String]])(
     implicit config: TaskConfig) = {
-    import config._
     val protocol = if(useHttps) "https:" else "http:"
-    val port = if(useHttps) httpsPort else httpPort
+    val port = if(useHttps) config.httpsPort else config.httpPort
+    import config.serverDomain
+    import config.projectName
     html(
       head(
         meta(
@@ -47,33 +47,33 @@ object TaskPage {
         input(
           `type` := "hidden",
           value := write(prompt),
-          name := promptLabel,
-          id := promptLabel),
+          name := FieldLabels.promptLabel,
+          id := FieldLabels.promptLabel),
         input(
           `type` := "hidden",
           value := write(serverDomain),
-          name := serverDomainLabel,
-          id := serverDomainLabel),
+          name := FieldLabels.serverDomainLabel,
+          id := FieldLabels.serverDomainLabel),
         input(
           `type` := "hidden",
-          value := write(httpPort),
-          name := httpPortLabel,
-          id := httpPortLabel),
+          value := write(config.httpPort),
+          name := FieldLabels.httpPortLabel,
+          id := FieldLabels.httpPortLabel),
         input(
           `type` := "hidden",
-          value := write(httpsPort),
-          name := httpsPortLabel,
-          id := httpsPortLabel),
+          value := write(config.httpsPort),
+          name := FieldLabels.httpsPortLabel,
+          id := FieldLabels.httpsPortLabel),
         input(
           `type` := "hidden",
           value := write(taskSpec.taskKey),
-          name := taskKeyLabel,
-          id := taskKeyLabel),
+          name := FieldLabels.taskKeyLabel,
+          id := FieldLabels.taskKeyLabel),
         form(
-          name := mturkFormLabel,
+          name := FieldLabels.mturkFormLabel,
           method := "post",
-          id := mturkFormLabel,
-          action := externalSubmitURL)(
+          id := FieldLabels.mturkFormLabel,
+          action := config.externalSubmitURL)(
           // where turk puts the assignment ID
           input(
             `type` := "hidden",
@@ -84,11 +84,11 @@ object TaskPage {
           input(
             `type` := "hidden",
             value := "",
-            name := responseLabel,
-            id := responseLabel),
+            name := FieldLabels.responseLabel,
+            id := FieldLabels.responseLabel),
           // and here I'll let the client code do its magic
           div(
-            id := rootClientDivLabel,
+            id := FieldLabels.rootClientDivLabel,
             "Waiting for task data from server... (If this message does not disappear shortly, the server is down. Try refreshing in a minute or so.)"
           )
         ),

@@ -141,7 +141,7 @@ sealed trait TaskSpecification {
     * @return the well-typed data representation of an annotator response
     */
   final def extractResponse(answerXML: String): Response =
-    read[Response](getAnswers(answerXML)(responseLabel))
+    read[Response](getAnswers(answerXML)(FieldLabels.responseLabel))
 
   /** Extracts the annotator's feedback from an answer XML string.
     *
@@ -153,7 +153,7 @@ sealed trait TaskSpecification {
     * @return the annotator's feedback
     */
   final def extractFeedback(answerXML: String): String =
-    getAnswers(answerXML).get(feedbackLabel).getOrElse("")
+    getAnswers(answerXML).get(FieldLabels.feedbackLabel).getOrElse("")
 
   /** Makes an Assignment data structure corresponding to a completed assignment on MTurk.
     * Does not save it to disk since it hasn't been reviewed yet.

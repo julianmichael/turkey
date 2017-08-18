@@ -16,6 +16,11 @@ import upickle.default._
 
 import com.typesafe.scalalogging.StrictLogging
 
+/**
+  * Manages a particular kind of task; corresponds to a single TaskSpecification / HIT Type.
+  * In here will be all of the logic related to how to review HITs, do quality control, keep track of auxiliary data,
+  * schedule which HITs should be uploaded when, etc.
+  */
 abstract class HITManager[Prompt, Response](
   helper: HITManager.Helper[Prompt, Response]
 ) extends Actor {
