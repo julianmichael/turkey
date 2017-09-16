@@ -43,13 +43,16 @@ class Webservice(
   def route = get {
     pathSingleSlash {
       parameter('taskKey) { taskKey =>
-        rejectEmptyResponse {
-          complete {
-            taskIndex.get(taskKey) map { taskSpec =>
-              HttpEntity(
-                ContentTypes.`text/html(UTF-8)`,
-                TaskPage.htmlPage(taskSpec.samplePrompt, taskSpec, useHttps = false, headTags = taskSpec.taskPageHeadElements, bodyEndTags = taskSpec.taskPageBodyElements)(taskSpec.promptWriter, config).render
-              )
+        extractScheme { scheme =>
+          val shouldUseHttps = scheme == "https"
+          rejectEmptyResponse {
+            complete {
+              taskIndex.get(taskKey) map { taskSpec =>
+                HttpEntity(
+                  ContentTypes.`text/html(UTF-8)`,
+                  TaskPage.htmlPage(taskSpec.samplePrompt, taskSpec, useHttps = shouldUseHttps, headTags = taskSpec.taskPageHeadElements, bodyEndTags = taskSpec.taskPageBodyElements)(taskSpec.promptWriter, config).render
+                )
+              }
             }
           }
         }
