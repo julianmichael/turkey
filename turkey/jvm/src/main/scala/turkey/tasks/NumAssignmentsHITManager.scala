@@ -71,35 +71,43 @@ class NumAssignmentsHITManager[Prompt, Response](
     helper.finishedHITInfos(prompt).map(_.assignments.size).sum >= numAssignmentsForPrompt(prompt)
 
   final override def reviewHITs: Unit = {
-    for {
-      allMTurkHITs <- Try(config.service.searchAllHITs()).toOptionLogging(logger).toList
-      mTurkHIT <- allMTurkHITs.filter(_.getHITTypeId() == hitTypeId)
-      hit <- config.hitDataService.getHIT[Prompt](hitTypeId, mTurkHIT.getHITId).toOptionLogging(logger)
+    def reviewAssignmentsForHIT(hit: HIT[Prompt]) = for {
+      submittedMTurkAssignments <- Try(config.service.getAllAssignmentsForHIT(hit.hitId, Array(AssignmentStatus.Submitted))).toOptionLogging(logger).toList
+      mTurkAssignment <- submittedMTurkAssignments
+      assignment = helper.taskSpec.makeAssignment(hit.hitId, mTurkAssignment)
+      if !helper.isInReview(assignment)
     } yield {
-      val submittedAssignments = config.service.getAllAssignmentsForHIT(hit.hitId, Array(AssignmentStatus.Submitted))
-      // review all submitted assignments (that are not currently in review)
-      for(a <- submittedAssignments) {
-        val assignmentTry = Try(helper.taskSpec.makeAssignment(hit.hitId, a))
+      reviewAssignment(hit, assignment)
+      assignment
+    }
 
-        assignmentTry match {
-          case Success(assignment) => if(helper.isInReview(assignment).isEmpty) {
-            reviewAssignment(hit, assignment)
-          }
-          case Failure(e) =>
-            logger.error(s"Error parsing assignment: ${e.getMessage}; assignment:\n$a")
-            config.service.approveAssignment(
-              a.getAssignmentId,
-              "There was an error in parsing your response to the HIT. Please notify the requester.")
-        }
-      }
-      // if the HIT is "reviewable", and all its assignments are reviewed (i.e., no longer "Submitted"), we can dispose
-      if(mTurkHIT.getHITStatus == HITStatus.Reviewable && submittedAssignments.isEmpty) {
+    // reviewable HITs; will always cover all HITs asking for only one assignment
+    val reviewableHITs = for {
+      reviewableMTurkHITs <- Try(
+        config.service.getAllReviewableHITs(hitTypeId)
+      ).toOptionLogging(logger).toList
+      mTurkHIT <- reviewableMTurkHITs
+      hit <- config.hitDataService.getHIT[Prompt](hitTypeId, mTurkHIT.getHITId).toOptionLogging(logger).toList
+    } yield {
+      val assignmentSubmissions = reviewAssignmentsForHIT(hit)
+      // if the HIT is "reviewable", and all its assignments are no longer "Submitted"
+      // (in which case the above list would be empty), we can dispose the HIT
+      if(assignmentSubmissions.isEmpty) {
         helper.finishHIT(hit)
         if(isFinished(hit.prompt)) {
           promptFinished(hit.prompt)
         }
       }
+      hit
     }
+    val reviewableHITSet = reviewableHITs.toSet
+
+    // for HITs asking for more than one assignment, we want to check those manually
+    for {
+      (prompt, hitInfos) <- helper.activeHITInfosByPromptIterator.toList
+      HITInfo(hit, _) <- hitInfos
+      if numAssignmentsForPrompt(hit.prompt) == 1 && !reviewableHITSet.contains(hit)
+    } yield reviewAssignmentsForHIT(hit)
 
     // refresh: upload new hits to fill gaps
     val numToUpload = numHITsToKeepActive - helper.numActiveHITs

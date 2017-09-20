@@ -76,17 +76,8 @@ object HITManager {
     // disable method, not really complete yet
 
     def disableAll: Unit = {
-      // TODO get all currently pending assignments and manually approve them?
-      // saving the results in another location? THEN disable all HITs?
-      // NOTE the above is an old todo. not sure if I still want to do it. not taking the time to think about it
-      // TODO XXX integrate this with helper state. as of now weird things prob will happen
-      // so you need to restart any time you disable. fortunately you probably want to anyway...
-      config.service.searchAllHITs()
-        .filter(hit => hit.getHITTypeId().equals(hitTypeId))
-        .foreach(hit => {
-                   config.service.disableHIT(hit.getHITId())
-                   logger.info(s"Disabled HIT: ${hit.getHITId()}\nHIT type for disabled HIT: ${hitTypeId}")
-                 })
+      val currentlyActiveHITs = activeHITs.iterator.toList
+      currentlyActiveHITs.foreach(disableHIT)
     }
 
     // HITs Active stuff
@@ -157,30 +148,51 @@ object HITManager {
     def isActive(hitId: String): Boolean = activeHITs.exists(_.hitId == hitId)
     def numActiveHITs = activeHITs.size
 
+    private[this] def processRemovedHIT(hit: HIT[Prompt]): Unit = {
+      if(!isActive(hit)) {
+        logger.error(s"Trying to finish HIT that isn't active? $hit")
+      } else {
+        activeHITs -= hit
+        // add to other appropriate data structures
+        val finishedData = finishedHITInfos(hit.prompt)
+        val activeData = activeHITInfos(hit.prompt)
+        val curInfo = activeData
+          .find(_.hit.hitId == hit.hitId)
+          .getOrElse {
+          logger.error("Could not find active HIT to move to finished");
+          HITInfo(
+            hit,
+            config.hitDataService.getAssignmentsForHIT[Response](hitTypeId, hit.hitId).get)
+        }
+        val newActiveData = activeData.filterNot(_.hit.hitId == hit.hitId)
+        val newFinishedData = curInfo :: finishedData
+        activeHITInfosByPrompt.put(hit.prompt, newActiveData)
+        finishedHITInfosByPrompt.put(hit.prompt, newFinishedData)
+      }
+    }
+
+    def disableHIT(hit: HIT[Prompt]): Unit = {
+      Try(config.service.disableHIT(hit.hitId)) match {
+        case Success(_) =>
+          logger.info(s"Disabled HIT: ${hit.hitId}\nHIT type for disabled HIT: ${hitTypeId}")
+          processRemovedHIT(hit)
+        case Failure(e) =>
+          logger.error(s"HIT disabling failed:\n$hit\n$e")
+      }
+    }
+
     /** Disposes of a disposable HIT and takes care of bookkeeping.
       * Assumes the HIT is disposable.
       */
     def finishHIT(hit: HIT[Prompt]): Unit = {
-      config.service.disposeHIT(hit.hitId)
-      if(!isActive(hit)) {
-        logger.error(s"Trying to finish HIT that isn't active? $hit")
+      Try(config.service.disposeHIT(hit.hitId)) match {
+        case Success(_) =>
+          logger.info(s"Disposed HIT: ${hit.hitId}\nHIT type for disposed HIT: ${hitTypeId}")
+          processRemovedHIT(hit)
+        case Failure(e) =>
+          logger.error(s"HIT disposal failed; disabling HIT instead:\n$hit\n$e")
+          disableHIT(hit)
       }
-      activeHITs -= hit
-      // add to other appropriate data structures
-      val finishedData = finishedHITInfos(hit.prompt)
-      val activeData = activeHITInfos(hit.prompt)
-      val curInfo = activeData
-        .find(_.hit.hitId == hit.hitId)
-        .getOrElse {
-        logger.error("Could not find active HIT to move to finished");
-        HITInfo(
-          hit,
-          config.hitDataService.getAssignmentsForHIT[Response](hitTypeId, hit.hitId).get)
-      }
-      val newActiveData = activeData.filterNot(_.hit.hitId == hit.hitId)
-      val newFinishedData = curInfo :: finishedData
-      activeHITInfosByPrompt.put(hit.prompt, newActiveData)
-      finishedHITInfosByPrompt.put(hit.prompt, newFinishedData)
     }
 
     // Assignment reviewing
@@ -190,10 +202,14 @@ object HITManager {
 
     private[this] val assignmentsInReview = mutable.Set.empty[AssignmentInReview]
 
-    def isInReview(assignment: Assignment[Response]): Option[AssignmentInReview] =
+    def getInReview(assignment: Assignment[Response]): Option[AssignmentInReview] =
       assignmentsInReview.find(_.assignment == assignment)
-    def isInReview(assignmentId: String): Option[AssignmentInReview] =
+    def getInReview(assignmentId: String): Option[AssignmentInReview] =
       assignmentsInReview.find(_.assignment.assignmentId == assignmentId)
+    def isInReview(assignment: Assignment[Response]): Boolean =
+      getInReview(assignment).nonEmpty
+    def isInReview(assignmentId: String): Boolean =
+      getInReview(assignmentId).nonEmpty
     def numAssignmentsInReview = assignmentsInReview.size
 
     /** Mark an assignment as under review. */
