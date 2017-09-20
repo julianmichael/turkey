@@ -53,7 +53,7 @@ class TaskManager[Prompt, Response](
     schedule.foreach(_.cancel())
   }
 
-  // temporarily withdraw HITs from the system; an may re-extend them or cause them to finish
+  // temporarily withdraw HITs from the system; an update may re-extend them or cause them to finish?
   private[this] def expire: Unit = {
     stop
     config.service.searchAllHITs
@@ -68,7 +68,6 @@ class TaskManager[Prompt, Response](
   private[this] def disable: Unit = {
     stop
     update
-    expire
     hitManager ! DisableAll
   }
 
