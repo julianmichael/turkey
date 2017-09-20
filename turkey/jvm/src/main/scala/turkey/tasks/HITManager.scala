@@ -166,7 +166,11 @@ object HITManager {
         }
         val newActiveData = activeData.filterNot(_.hit.hitId == hit.hitId)
         val newFinishedData = curInfo :: finishedData
-        activeHITInfosByPrompt.put(hit.prompt, newActiveData)
+        if(newActiveData.isEmpty) {
+          activeHITInfosByPrompt.remove(hit.prompt)
+        } else {
+          activeHITInfosByPrompt.put(hit.prompt, newActiveData)
+        }
         finishedHITInfosByPrompt.put(hit.prompt, newFinishedData)
       }
     }
