@@ -94,7 +94,7 @@ case class SandboxTaskConfig(
 ) extends TaskConfig {
 
   override val service: AmazonMTurk = AmazonMTurkClientBuilder.standard
-    .withEndpointConfiguration(new EndpointConfiguration(sandboxEndpointUrl, endpointRegion.getName))
+    .withEndpointConfiguration(new EndpointConfiguration(TaskConfig.sandboxEndpointUrl, TaskConfig.endpointRegion.getName))
     .build
 
   override val externalSubmitURL = "https://workersandbox.mturk.com/mturk/externalSubmit"
