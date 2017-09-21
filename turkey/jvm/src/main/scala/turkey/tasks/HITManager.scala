@@ -36,7 +36,8 @@ abstract class HITManager[Prompt, Response](
 
   // delegates to helper when given a standard message defined in the helper
   private[this] final val receiveHelperMessage: PartialFunction[Any, Unit] = {
-    case DisableAll => helper.disableAll
+    case ExpireAll => helper.expireAll
+    case DeleteAll => helper.deleteAll
     case ReviewHITs => reviewHITs
     case AddPrompt(p) => addPrompt(p)
   }
@@ -46,7 +47,7 @@ abstract class HITManager[Prompt, Response](
     PartialFunction.empty[Any, Unit]
 
   /** Queries Turk and refreshes the task state, sending assignments for approval/validation,
-    * approving/rejecting them, disposing HITs, etc. as necessary */
+    * approving/rejecting them, deleting HITs, etc. as necessary */
   def reviewHITs: Unit
 
   /** Adds a prompt to the set of prompts that this HITManager should be responsible for sourcing responses for. */
@@ -71,18 +72,22 @@ object HITManager {
 
     object Message {
       sealed trait Message
-      case object DisableAll extends Message
+      case object DeleteAll extends Message
+      case object ExpireAll extends Message
       case object ReviewHITs extends Message
       case class AddPrompt(prompt: Prompt) extends Message
     }
     import Message._
     import taskSpec.hitTypeId
 
-    // disable method, not really complete yet
-
-    def disableAll: Unit = {
+    def expireAll: Unit = {
       val currentlyActiveHITs = activeHITs.iterator.toList
-      currentlyActiveHITs.foreach(disableHIT)
+      currentlyActiveHITs.foreach(expireHIT)
+    }
+
+    def deleteAll: Unit = {
+      val currentlyActiveHITs = activeHITs.iterator.toList
+      currentlyActiveHITs.foreach(deleteHIT)
     }
 
     // HITs Active stuff
@@ -154,61 +159,55 @@ object HITManager {
     def isActive(hitId: String): Boolean = activeHITs.exists(_.hitId == hitId)
     def numActiveHITs = activeHITs.size
 
-    private[this] def processRemovedHIT(hit: HIT[Prompt]): Unit = {
-      if(!isActive(hit)) {
-        logger.error(s"Trying to finish HIT that isn't active? $hit")
-      } else {
-        activeHITs -= hit
-        // add to other appropriate data structures
-        val finishedData = finishedHITInfos(hit.prompt)
-        val activeData = activeHITInfos(hit.prompt)
-        val curInfo = activeData
-          .find(_.hit.hitId == hit.hitId)
-          .getOrElse {
-          logger.error("Could not find active HIT to move to finished");
-          HITInfo(
-            hit,
-            config.hitDataService.getAssignmentsForHIT[Response](hitTypeId, hit.hitId).get)
-        }
-        val newActiveData = activeData.filterNot(_.hit.hitId == hit.hitId)
-        val newFinishedData = curInfo :: finishedData
-        if(newActiveData.isEmpty) {
-          activeHITInfosByPrompt.remove(hit.prompt)
-        } else {
-          activeHITInfosByPrompt.put(hit.prompt, newActiveData)
-        }
-        finishedHITInfosByPrompt.put(hit.prompt, newFinishedData)
-      }
-    }
-
-    def disableHIT(hit: HIT[Prompt]): Unit = {
-      Try {
+    def expireHIT(hit: HIT[Prompt]): Unit = {
+      val cal = java.util.Calendar.getInstance
+      cal.add(java.util.Calendar.DATE, -1)
+      val yesterday = cal.getTime
+      Try(
         config.service.updateExpirationForHIT(
           (new UpdateExpirationForHITRequest)
             .withHITId(hit.hitId)
-            .withExpireAt(new java.util.Date())
+            .withExpireAt(yesterday)
         )
-        config.service.deleteHIT((new DeleteHITRequest).withHITId(hit.hitId))
-      } match {
+      ) match {
         case Success(_) =>
-          logger.info(s"Disabled HIT: ${hit.hitId}\nHIT type for disabled HIT: ${hitTypeId}")
-          processRemovedHIT(hit)
+          logger.info(s"Expired HIT: ${hit.hitId}\nHIT type for expired HIT: ${hitTypeId}")
         case Failure(e) =>
-          logger.error(s"HIT disabling failed:\n$hit\n$e")
+          logger.error(s"HIT expiration failed:\n$hit\n$e")
       }
     }
 
-    /** Disposes of a disposable HIT and takes care of bookkeeping.
-      * Assumes the HIT is disposable.
-      */
-    def finishHIT(hit: HIT[Prompt]): Unit = {
+    /** Deletes a HIT (if possible) and takes care of bookkeeping. */
+    def deleteHIT(hit: HIT[Prompt]): Unit = {
       Try(config.service.deleteHIT((new DeleteHITRequest).withHITId(hit.hitId))) match {
         case Success(_) =>
-          logger.info(s"Disposed HIT: ${hit.hitId}\nHIT type for disposed HIT: ${hitTypeId}")
-          processRemovedHIT(hit)
+          logger.info(s"Deleted HIT: ${hit.hitId}\nHIT type for deleted HIT: ${hitTypeId}")
+          if(!isActive(hit)) {
+            logger.error(s"Deleted HIT that isn't registered as active: $hit")
+          } else {
+            activeHITs -= hit
+            // add to other appropriate data structures
+            val finishedData = finishedHITInfos(hit.prompt)
+            val activeData = activeHITInfos(hit.prompt)
+            val curInfo = activeData
+              .find(_.hit.hitId == hit.hitId)
+              .getOrElse {
+              logger.error("Could not find active HIT to move to finished");
+              HITInfo(
+                hit,
+                config.hitDataService.getAssignmentsForHIT[Response](hitTypeId, hit.hitId).get)
+            }
+            val newActiveData = activeData.filterNot(_.hit.hitId == hit.hitId)
+            val newFinishedData = curInfo :: finishedData
+            if(newActiveData.isEmpty) {
+              activeHITInfosByPrompt.remove(hit.prompt)
+            } else {
+              activeHITInfosByPrompt.put(hit.prompt, newActiveData)
+            }
+            finishedHITInfosByPrompt.put(hit.prompt, newFinishedData)
+          }
         case Failure(e) =>
-          logger.error(s"HIT disposal failed; disabling HIT instead:\n$hit\n$e")
-          disableHIT(hit)
+          logger.error(s"HIT deletion failed:\n$hit\n$e")
       }
     }
 

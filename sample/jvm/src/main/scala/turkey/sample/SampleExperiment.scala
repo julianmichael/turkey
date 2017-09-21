@@ -71,9 +71,9 @@ class SampleExperiment(implicit config: TaskConfig) {
     server
     actor ! Start(interval)
   }
-  def stop() = actor ! Stop
-  def disable() = actor ! Disable
-  def update() = {
+  def stop = actor ! Stop
+  def delete = actor ! Delete
+  def update = {
     server
     actor ! Update
   }

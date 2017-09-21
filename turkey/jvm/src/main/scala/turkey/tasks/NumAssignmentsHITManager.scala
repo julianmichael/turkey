@@ -101,9 +101,9 @@ class NumAssignmentsHITManager[Prompt, Response](
     } yield {
       val assignmentSubmissions = reviewAssignmentsForHIT(hit)
       // if the HIT is "reviewable", and all its assignments are no longer "Submitted"
-      // (in which case the above list would be empty), we can dispose the HIT
+      // (in which case the above list would be empty), we can delete the HIT
       if(assignmentSubmissions.isEmpty) {
-        helper.finishHIT(hit)
+        helper.deleteHIT(hit)
         if(isFinished(hit.prompt)) {
           promptFinished(hit.prompt)
         }

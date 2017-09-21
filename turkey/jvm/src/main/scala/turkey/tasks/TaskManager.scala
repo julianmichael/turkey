@@ -34,7 +34,8 @@ class TaskManager[Prompt, Response](
     case Start(interval, delay) => start(interval, delay)
     case Stop => stop
     case Update => update
-    case Disable => disable
+    case Expire => expire
+    case Delete => delete
   }
 
   // used to schedule updates once this has started
@@ -52,14 +53,20 @@ class TaskManager[Prompt, Response](
     schedule.foreach(_.cancel())
   }
 
-  // delete all HITs from the system (reviewing reviewable HITs and approving other pending assignments)
-  private[this] def disable: Unit = {
+  // stop updating and expire all currently uploaded HITs
+  private[this] def expire: Unit = {
     stop
-    update
-    hitManager ! DisableAll
+    hitManager ! ExpireAll
   }
 
-  // review assignments, dispose of completed HITs, and upload new HITs
+  // delete all HITs from the system (reviewing reviewable HITs and approving other pending assignments)
+  private[this] def delete: Unit = {
+    stop
+    update
+    hitManager ! DeleteAll
+  }
+
+  // review assignments, delete completed HITs, and upload new HITs
   private[this] def update: Unit = {
     logger.info(s"Updating (${hitTypeId})...")
     hitManager ! ReviewHITs
@@ -73,6 +80,7 @@ object TaskManager {
     case class Start(interval: FiniteDuration, delay: FiniteDuration = 2 seconds) extends Message
     case object Stop extends Message
     case object Update extends Message
-    case object Disable extends Message
+    case object Expire extends Message
+    case object Delete extends Message
   }
 }
