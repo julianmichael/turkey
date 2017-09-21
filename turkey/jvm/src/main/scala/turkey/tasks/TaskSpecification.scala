@@ -76,7 +76,7 @@ sealed trait TaskSpecification {
       (new CreateHITTypeRequest)
         .withAutoApprovalDelayInSeconds(hitType.autoApprovalDelay)
         .withAssignmentDurationInSeconds(hitType.assignmentDuration)
-        .withReward(f"${hitType.reward}.2f")
+        .withReward(f"${hitType.reward}%.2f")
         .withTitle(hitType.title)
         .withKeywords(hitType.keywords)
         .withDescription(hitType.description)
