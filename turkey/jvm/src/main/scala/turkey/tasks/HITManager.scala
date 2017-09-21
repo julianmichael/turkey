@@ -141,8 +141,7 @@ object HITManager {
           activeHITs += hit
           val newHITInfo = HITInfo[Prompt, Response](hit, Nil)
           activeHITInfosByPrompt.put(prompt, newHITInfo :: activeHITInfos(prompt))
-          // TODO log with url
-          // logger.info(s"Created HIT: ${hit.hitId}\n${config.service.getWebsiteURL}/mturk/preview?groupId=${hit.hitTypeId}")
+          logger.info(s"Created HIT: ${hit.hitId}\n${config.workerUrl}/mturk/preview?groupId=${hit.hitTypeId}")
         case Failure(e) =>
           logger.error(e.getMessage)
           e.printStackTrace

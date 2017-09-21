@@ -23,6 +23,9 @@ sealed trait TaskConfig {
     */
   val service: AmazonMTurk
 
+  /* The URL at which you can access and work on a group of HITs if you know the HIT Type ID. */
+  val workerUrl: String
+
   /** The URL used by HTMLQuestion and ExternalQuestion question types to submit assignments.
     * (See http://docs.aws.amazon.com/AWSMechTurk/latest/AWSMturkAPI/ApiReference_QuestionAnswerDataArticle.html
     * for documentation on these question types.)
@@ -75,6 +78,8 @@ case class ProductionTaskConfig(
     .withRegion(TaskConfig.endpointRegion)
     .build
 
+  override val workerUrl = "https://www.mturk.com"
+
   override val externalSubmitURL = "https://www.mturk.com/mturk/externalSubmit"
 
   override val isProduction = true
@@ -96,6 +101,8 @@ case class SandboxTaskConfig(
   override val service: AmazonMTurk = AmazonMTurkClientBuilder.standard
     .withEndpointConfiguration(new EndpointConfiguration(TaskConfig.sandboxEndpointUrl, TaskConfig.endpointRegion.getName))
     .build
+
+  override val workerUrl = "https://workersandbox.mturk.com"
 
   override val externalSubmitURL = "https://workersandbox.mturk.com/mturk/externalSubmit"
 

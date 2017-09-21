@@ -172,9 +172,9 @@ sealed trait TaskSpecification {
 
   // auxiliary method for extracting response and feedback
   private[this] final def getAnswers(answerXML: String): Map[String, String] = {
-    println(s"Answer XML:\n$answerXML")
-    // TODO
-    ???
+    (scala.xml.XML.loadString(answerXML) \ "Answer").toList
+      .map((x: scala.xml.Node) => (x \ "QuestionIdentifier").text -> (x \ "FreeText").text)
+      .toMap
   }
 
   /** Creates the "question" XML object to send to the MTurk API when creating a HIT.
