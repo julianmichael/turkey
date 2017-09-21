@@ -3,10 +3,11 @@ package tasks
 
 import akka.actor.ActorSystem
 
-import com.amazonaws.mturk.service.axis.RequesterService
-import com.amazonaws.mturk.util.PropertiesClientConfig
-import com.amazonaws.mturk.util.ClientConfig
-import com.amazonaws.mturk.dataschema.QuestionFormAnswersType
+import com.amazonaws.auth.AWSCredentials
+import com.amazonaws.services.mturk.AmazonMTurk
+import com.amazonaws.services.mturk.AmazonMTurkClientBuilder
+import com.amazonaws.regions.Regions
+import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
 
 import upickle.default._
 
@@ -15,11 +16,12 @@ import upickle.default._
   * on production or in the sandbox.
   */
 sealed trait TaskConfig {
+
   /** The API hook with which we communicate with MTurk.
     * We need a different hook depending on whether we're in sandbox or production,
     * because it uses a different URL.
     */
-  val service: RequesterService
+  val service: AmazonMTurk
 
   /** The URL used by HTMLQuestion and ExternalQuestion question types to submit assignments.
     * (See http://docs.aws.amazon.com/AWSMechTurk/latest/AWSMturkAPI/ApiReference_QuestionAnswerDataArticle.html
@@ -57,17 +59,8 @@ sealed trait TaskConfig {
 }
 
 object TaskConfig {
-  /** Convenience method to load configuration that is common to sandbox and production.
-    * In particular, this loads our API keys from the `mturk.properties` file.
-    */
-  protected[tasks] def loadGlobalConfig(): ClientConfig = {
-    val config = new PropertiesClientConfig("mturk.properties")
-    import scala.collection.JavaConverters._
-    config.setRetriableErrors(Set("Server.ServiceUnavailable").asJava)
-    config.setRetryAttempts(10)
-    config.setRetryDelayMillis(1000L)
-    config
-  }
+  val sandboxEndpointUrl = "https://mturk-requester-sandbox.us-east-1.amazonaws.com"
+  val endpointRegion = Regions.US_EAST_1
 }
 
 /** Complete configuration for running on production. */
@@ -76,10 +69,14 @@ case class ProductionTaskConfig(
   override val serverDomain: String,
   override val hitDataService: HITDataService
 ) extends TaskConfig {
-  private[this] val config = TaskConfig.loadGlobalConfig()
-  config.setServiceURL(ClientConfig.PRODUCTION_SERVICE_URL)
-  override val service = new RequesterService(config)
+
+  // production endpoint configuration is chosen by default
+  override val service: AmazonMTurk = AmazonMTurkClientBuilder.standard
+    .withRegion(TaskConfig.endpointRegion)
+    .build
+
   override val externalSubmitURL = "https://www.mturk.com/mturk/externalSubmit"
+
   override val isProduction = true
 
   override val actorSystem = ActorSystem("production")
@@ -93,11 +90,15 @@ case class ProductionTaskConfig(
 case class SandboxTaskConfig(
   override val projectName: String,
   override val serverDomain: String,
-  override val hitDataService: HITDataService) extends TaskConfig {
-  private[this] val config = TaskConfig.loadGlobalConfig()
-  config.setServiceURL(ClientConfig.SANDBOX_SERVICE_URL)
-  override val service = new RequesterService(config)
+  override val hitDataService: HITDataService
+) extends TaskConfig {
+
+  override val service: AmazonMTurk = AmazonMTurkClientBuilder.standard
+    .withEndpointConfiguration(new EndpointConfiguration(sandboxEndpointUrl, endpointRegion.getName))
+    .build
+
   override val externalSubmitURL = "https://workersandbox.mturk.com/mturk/externalSubmit"
+
   override val isProduction = false
 
   override val actorSystem = ActorSystem("sandbox")

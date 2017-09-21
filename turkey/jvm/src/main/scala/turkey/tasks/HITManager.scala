@@ -3,7 +3,12 @@ package tasks
 
 import turkey.util._
 
-import com.amazonaws.mturk.requester.AssignmentStatus
+import com.amazonaws.services.mturk.model.AssignmentStatus
+import com.amazonaws.services.mturk.model.ListHITsRequest
+import com.amazonaws.services.mturk.model.UpdateExpirationForHITRequest
+import com.amazonaws.services.mturk.model.DeleteHITRequest
+import com.amazonaws.services.mturk.model.ApproveAssignmentRequest
+import com.amazonaws.services.mturk.model.RejectAssignmentRequest
 
 import scala.util.{Try, Success, Failure}
 import scala.concurrent.duration._
@@ -85,8 +90,9 @@ object HITManager {
     // active HITs are currently up on Turk
     private[this] val activeHITs = {
       val active = mutable.Set.empty[HIT[Prompt]]
+      import scala.collection.JavaConverters._
       for {
-        mTurkHIT <- config.service.searchAllHITs
+        mTurkHIT <- config.service.listHITs(new ListHITsRequest).getHITs.asScala
         if mTurkHIT.getHITTypeId.equals(hitTypeId)
         hit <- config.hitDataService.getHIT[Prompt](hitTypeId, mTurkHIT.getHITId).toOptionLogging(logger)
       } yield (active += hit)
@@ -135,7 +141,8 @@ object HITManager {
           activeHITs += hit
           val newHITInfo = HITInfo[Prompt, Response](hit, Nil)
           activeHITInfosByPrompt.put(prompt, newHITInfo :: activeHITInfos(prompt))
-          logger.info(s"Created HIT: ${hit.hitId}\n${config.service.getWebsiteURL}/mturk/preview?groupId=${hit.hitTypeId}")
+          // TODO log with url
+          // logger.info(s"Created HIT: ${hit.hitId}\n${config.service.getWebsiteURL}/mturk/preview?groupId=${hit.hitTypeId}")
         case Failure(e) =>
           logger.error(e.getMessage)
           e.printStackTrace
@@ -176,7 +183,14 @@ object HITManager {
     }
 
     def disableHIT(hit: HIT[Prompt]): Unit = {
-      Try(config.service.disableHIT(hit.hitId)) match {
+      Try {
+        config.service.updateExpirationForHIT(
+          (new UpdateExpirationForHITRequest)
+            .withHITId(hit.hitId)
+            .withExpireAt(new java.util.Date())
+        )
+        config.service.deleteHIT((new DeleteHITRequest).withHITId(hit.hitId))
+      } match {
         case Success(_) =>
           logger.info(s"Disabled HIT: ${hit.hitId}\nHIT type for disabled HIT: ${hitTypeId}")
           processRemovedHIT(hit)
@@ -189,7 +203,7 @@ object HITManager {
       * Assumes the HIT is disposable.
       */
     def finishHIT(hit: HIT[Prompt]): Unit = {
-      Try(config.service.disposeHIT(hit.hitId)) match {
+      Try(config.service.deleteHIT((new DeleteHITRequest).withHITId(hit.hitId))) match {
         case Success(_) =>
           logger.info(s"Disposed HIT: ${hit.hitId}\nHIT type for disposed HIT: ${hitTypeId}")
           processRemovedHIT(hit)
@@ -231,8 +245,11 @@ object HITManager {
     ): Unit = {
       import aInRev.assignment
       evaluation match {
-        case Approval(message) =>
-          config.service.approveAssignment(assignment.assignmentId, message)
+        case Approval(message) => Try {
+          config.service.approveAssignment(
+            (new ApproveAssignmentRequest)
+              .withAssignmentId(assignment.assignmentId)
+              .withRequesterFeedback(message))
           assignmentsInReview -= aInRev
           val curData = activeHITInfos(hit.prompt)
           val curInfo = curData.find(_.hit.hitId == hit.hitId)
@@ -247,9 +264,13 @@ object HITManager {
                         s"HIT for approved assignment: ${assignment.hitId}; $hitTypeId")
           config.hitDataService.saveApprovedAssignment(assignment).recover { case e =>
             logger.error(s"Failed to save approved assignment; data:\n${write(assignment)}")
+          }
         }
-        case Rejection(message) =>
-          config.service.rejectAssignment(assignment.assignmentId, message)
+        case Rejection(message) => Try {
+          config.service.rejectAssignment(
+            (new RejectAssignmentRequest)
+              .withAssignmentId(assignment.assignmentId)
+              .withRequesterFeedback(message))
           assignmentsInReview -= aInRev
           logger.info(s"Rejected assignment: ${assignment.assignmentId}\n" +
                         s"HIT for rejected assignment: ${assignment.hitId}; ${hitTypeId}\n" +
@@ -257,6 +278,7 @@ object HITManager {
           config.hitDataService.saveRejectedAssignment(assignment) recover { case e =>
             logger.error(s"Failed to save approved assignment; data:\n${write(assignment)}")
           }
+        }
       }
     }
   }

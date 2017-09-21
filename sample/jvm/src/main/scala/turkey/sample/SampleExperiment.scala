@@ -73,7 +73,6 @@ class SampleExperiment(implicit config: TaskConfig) {
   }
   def stop() = actor ! Stop
   def disable() = actor ! Disable
-  def expire() = actor ! Expire
   def update() = {
     server
     actor ! Update

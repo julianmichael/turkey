@@ -29,14 +29,7 @@ lazy val turkey = crossProject.settings(
     "com.jsuereth" % "scala-arm_2.11" % "2.0-RC1",
     "com.typesafe.scala-logging" %% "scala-logging" % "3.5.0",
     // java deps:
-    "net.ettinsmoor" % "java-aws-mturk" % "1.6.2"
-      exclude("org.apache.commons","not-yet-commons-ssl")
-      exclude("apache-xerces","xercesImpl")
-      exclude("apache-xerces","resolver")
-      exclude("apache-xerces","xml-apis"),
-    "ca.juliusdavies" % "not-yet-commons-ssl" % "0.3.11",
-    "xerces" % "xercesImpl" % "2.9.1"
-  )
+    "com.amazonaws" % "aws-java-sdk" % "1.11.198")
 ).jsSettings(
   addCompilerPlugin("org.scalamacros" %% "paradise" % "2.1.0" cross CrossVersion.full),
   libraryDependencies ++= Seq(

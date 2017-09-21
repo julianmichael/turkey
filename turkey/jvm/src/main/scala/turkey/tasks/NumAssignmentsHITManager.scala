@@ -10,8 +10,10 @@ import upickle.default.Reader
 
 import akka.actor.ActorRef
 
-import com.amazonaws.mturk.requester.AssignmentStatus
-import com.amazonaws.mturk.requester.HITStatus
+import com.amazonaws.services.mturk.model.AssignmentStatus
+import com.amazonaws.services.mturk.model.HITStatus
+import com.amazonaws.services.mturk.model.ListAssignmentsForHITRequest
+import com.amazonaws.services.mturk.model.ListReviewableHITsRequest
 
 import com.typesafe.scalalogging.StrictLogging
 
@@ -70,10 +72,17 @@ class NumAssignmentsHITManager[Prompt, Response](
   def isFinished(prompt: Prompt) =
     helper.finishedHITInfos(prompt).map(_.assignments.size).sum >= numAssignmentsForPrompt(prompt)
 
+  import scala.collection.JavaConverters._
+
   final override def reviewHITs: Unit = {
     def reviewAssignmentsForHIT(hit: HIT[Prompt]) = for {
-      submittedMTurkAssignments <- Try(config.service.getAllAssignmentsForHIT(hit.hitId, Array(AssignmentStatus.Submitted))).toOptionLogging(logger).toList
-      mTurkAssignment <- submittedMTurkAssignments
+      getAssignmentsResult <- Try(
+        config.service.listAssignmentsForHIT(
+          (new ListAssignmentsForHITRequest)
+            .withHITId(hit.hitId)
+            .withAssignmentStatuses(AssignmentStatus.Submitted))
+      ).toOptionLogging(logger).toList
+      mTurkAssignment <- getAssignmentsResult.getAssignments.asScala
       assignment = helper.taskSpec.makeAssignment(hit.hitId, mTurkAssignment)
       if !helper.isInReview(assignment)
     } yield {
@@ -83,10 +92,11 @@ class NumAssignmentsHITManager[Prompt, Response](
 
     // reviewable HITs; will always cover all HITs asking for only one assignment
     val reviewableHITs = for {
-      reviewableMTurkHITs <- Try(
-        config.service.getAllReviewableHITs(hitTypeId)
+      reviewableHITsResult <- Try(
+        config.service.listReviewableHITs(
+          (new ListReviewableHITsRequest).withHITTypeId(hitTypeId))
       ).toOptionLogging(logger).toList
-      mTurkHIT <- reviewableMTurkHITs
+      mTurkHIT <- reviewableHITsResult.getHITs.asScala
       hit <- config.hitDataService.getHIT[Prompt](hitTypeId, mTurkHIT.getHITId).toOptionLogging(logger).toList
     } yield {
       val assignmentSubmissions = reviewAssignmentsForHIT(hit)

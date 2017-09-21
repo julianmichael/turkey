@@ -3,14 +3,15 @@ package tasks
 
 import turkey.util._
 
-import com.amazonaws.mturk.requester.{HIT => MTurkHIT}
-import com.amazonaws.mturk.requester.{Assignment => MTurkAssignment}
-import com.amazonaws.mturk.requester.QualificationRequirement
-import com.amazonaws.mturk.requester.ReviewPolicy
-import com.amazonaws.mturk.requester.PolicyParameter
-import com.amazonaws.mturk.requester.AssignmentStatus
-import com.amazonaws.mturk.service.axis.RequesterService
-import com.amazonaws.mturk.dataschema.QuestionFormAnswersType
+import com.amazonaws.services.mturk.model.{HIT => MTurkHIT}
+import com.amazonaws.services.mturk.model.{Assignment => MTurkAssignment}
+import com.amazonaws.services.mturk.model.QualificationRequirement
+import com.amazonaws.services.mturk.model.ReviewPolicy
+import com.amazonaws.services.mturk.model.PolicyParameter
+import com.amazonaws.services.mturk.model.AssignmentStatus
+import com.amazonaws.services.mturk.model.CreateHITTypeRequest
+import com.amazonaws.services.mturk.model.CreateHITWithHITTypeRequest
+import com.amazonaws.services.mturk.AmazonMTurkClient
 
 import java.util.Calendar
 
@@ -71,14 +72,16 @@ sealed trait TaskSpecification {
     * I'm not 100% sure this needs to be lazy... but it's not hurting anyone as it is.
     */
   final lazy val hitTypeId = frozenHITTypeId.getOrElse(
-    config.service.registerHITType(
-      hitType.autoApprovalDelay,
-      hitType.assignmentDuration,
-      hitType.reward,
-      hitType.title,
-      hitType.keywords,
-      hitType.description,
-      hitType.qualRequirements)
+    config.service.createHITType(
+      (new CreateHITTypeRequest)
+        .withAutoApprovalDelayInSeconds(hitType.autoApprovalDelay)
+        .withAssignmentDurationInSeconds(hitType.assignmentDuration)
+        .withReward(f"${hitType.reward}.2f")
+        .withTitle(hitType.title)
+        .withKeywords(hitType.keywords)
+        .withDescription(hitType.description)
+        .withQualificationRequirements(hitType.qualRequirements: _*)
+    ).getHITTypeId
   )
 
   /** Creates a HIT on MTurk.
@@ -103,28 +106,21 @@ sealed trait TaskSpecification {
     // just hash the time and main stuff of our request for the unique token.
     val uniqueRequestToken = (hitTypeId, questionXML, System.nanoTime()).toString.hashCode.toString
 
+    // NOTE: don't bother with requester annotation---we don't get it back and it causes errors if >255 bytes (which was documented NOWHERE)
     for {
-      mTurkHIT <- Try(
-        config.service.createHIT(
-          hitTypeId,
-          hitType.title,
-          hitType.description,
-          hitType.keywords,
-          questionXML,
-          hitType.reward,
-          hitType.assignmentDuration,
-          hitType.autoApprovalDelay,
-          lifetime,
-          numAssignments,
-          "", // don't bother with annotation---we don't get it back and it causes errors if >255 bytes (which was documented NOWHERE)
-          hitType.qualRequirements,
-          Array("Minimal", "HITQuestion", "HITDetail"), // response groups --- these don't actually do anything :(
-          uniqueRequestToken,
-          null, null)) // really not gonna bother with Amazon's automatic review policies for anything
+      hitCreationResult <- Try(
+        config.service.createHITWithHITType(
+          (new CreateHITWithHITTypeRequest)
+            .withHITTypeId(hitTypeId)
+            .withQuestion(questionXML)
+            .withLifetimeInSeconds(lifetime)
+            .withMaxAssignments(numAssignments)
+            .withUniqueRequestToken(uniqueRequestToken)
+        ))
       hit = HIT(hitTypeId,
-                mTurkHIT.getHITId,
+                hitCreationResult.getHIT.getHITId,
                 prompt,
-                mTurkHIT.getCreationTime.getTime.getTime)
+                hitCreationResult.getHIT.getCreationTime.getTime)
       _ <- config.hitDataService.saveHIT(hit)
     } yield hit
   }
@@ -167,20 +163,18 @@ sealed trait TaskSpecification {
       hitId = hitId,
       assignmentId = mTurkAssignment.getAssignmentId,
       workerId = mTurkAssignment.getWorkerId,
-      acceptTime = mTurkAssignment.getAcceptTime.getTime.getTime,
-      submitTime = mTurkAssignment.getSubmitTime.getTime.getTime,
+      acceptTime = mTurkAssignment.getAcceptTime.getTime,
+      submitTime = mTurkAssignment.getSubmitTime.getTime,
       response = extractResponse(mTurkAssignment.getAnswer),
       feedback = extractFeedback(mTurkAssignment.getAnswer))
 
   // == Private methods and fields ==
 
   // auxiliary method for extracting response and feedback
-  private[this] final def getAnswers(answerXML: String) = {
-    import scala.collection.JavaConverters._
-    RequesterService.parseAnswers(answerXML).getAnswer
-      .asScala.toList.asInstanceOf[List[QuestionFormAnswersType.AnswerType]]
-      .map(ans => (ans.getQuestionIdentifier, ans.getFreeText))
-      .toMap
+  private[this] final def getAnswers(answerXML: String): Map[String, String] = {
+    println(s"Answer XML:\n$answerXML")
+    // TODO
+    ???
   }
 
   /** Creates the "question" XML object to send to the MTurk API when creating a HIT.

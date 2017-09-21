@@ -2,7 +2,7 @@ package turkey
 
 // TODO: create a replacement for turk's QualificationRequirement
 // and move this and that to shared code
-import com.amazonaws.mturk.requester.QualificationRequirement
+import com.amazonaws.services.mturk.model.QualificationRequirement
 
 /** Represents all of the fields necessary to produce a HIT type.
   *

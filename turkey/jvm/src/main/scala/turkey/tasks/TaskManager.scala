@@ -34,7 +34,6 @@ class TaskManager[Prompt, Response](
     case Start(interval, delay) => start(interval, delay)
     case Stop => stop
     case Update => update
-    case Expire => expire
     case Disable => disable
   }
 
@@ -51,17 +50,6 @@ class TaskManager[Prompt, Response](
   // stop regular polling
   private[this] def stop: Unit = {
     schedule.foreach(_.cancel())
-  }
-
-  // temporarily withdraw HITs from the system; an update may re-extend them or cause them to finish?
-  private[this] def expire: Unit = {
-    stop
-    config.service.searchAllHITs
-      .filter(hit => hit.getHITTypeId().equals(hitTypeId))
-      .foreach(hit => {
-                 config.service.forceExpireHIT(hit.getHITId())
-                 logger.info(s"Expired HIT: ${hit.getHITId()}\nHIT type for expired HIT: ${hitTypeId}")
-               })
   }
 
   // delete all HITs from the system (reviewing reviewable HITs and approving other pending assignments)
@@ -85,7 +73,6 @@ object TaskManager {
     case class Start(interval: FiniteDuration, delay: FiniteDuration = 2 seconds) extends Message
     case object Stop extends Message
     case object Update extends Message
-    case object Expire extends Message
     case object Disable extends Message
   }
 }
