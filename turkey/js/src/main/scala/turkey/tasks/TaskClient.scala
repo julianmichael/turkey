@@ -13,12 +13,16 @@ import upickle.default._
 abstract class TaskClient[Prompt : Reader, Response : Writer] {
   import scala.scalajs.js.Dynamic.global
 
-  lazy val assignmentId: String = {
+  lazy val assignmentIdOpt: Option[String] = {
     global.turkSetAssignmentID()
-    jQuery("#assignmentId").attr("value").get
+    jQuery("#assignmentId").attr("value").toOption.filter(_ != "ASSIGNMENT_ID_NOT_AVAILABLE")
   }
 
-  lazy val isNotAssigned = assignmentId == "ASSIGNMENT_ID_NOT_AVAILABLE"
+  lazy val isNotAssigned = assignmentIdOpt.isEmpty
+
+  lazy val workerIdOpt: Option[String] = {
+    Option(global.turkGetParam("workerId", "UNASSIGNED").asInstanceOf[String]).filter(_ != "UNASSIGNED")
+  }
 
   import FieldLabels._
 
