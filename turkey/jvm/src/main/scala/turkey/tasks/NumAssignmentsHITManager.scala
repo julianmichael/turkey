@@ -116,7 +116,7 @@ class NumAssignmentsHITManager[Prompt, Response](
     for {
       (prompt, hitInfos) <- helper.activeHITInfosByPromptIterator.toList
       HITInfo(hit, _) <- hitInfos
-      if numAssignmentsForPrompt(hit.prompt) == 1 && !reviewableHITSet.contains(hit)
+      if numAssignmentsForPrompt(hit.prompt) > 1 && !reviewableHITSet.contains(hit)
     } yield reviewAssignmentsForHIT(hit)
 
     // refresh: upload new hits to fill gaps

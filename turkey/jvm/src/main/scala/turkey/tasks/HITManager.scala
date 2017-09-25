@@ -93,7 +93,9 @@ object HITManager {
     // HITs Active stuff
 
     // active HITs are currently up on Turk
-    private[this] val activeHITs = {
+    // finished means the HIT is not on turk (i.e., all assignments are done)
+    // actives by prompt includes HITs for which some assignments are done and some are not
+    private[this] val (activeHITs, finishedHITInfosByPrompt, activeHITInfosByPrompt) = {
       val active = mutable.Set.empty[HIT[Prompt]]
       import scala.collection.JavaConverters._
       for {
@@ -101,26 +103,21 @@ object HITManager {
         if mTurkHIT.getHITTypeId.equals(hitTypeId)
         hit <- config.hitDataService.getHIT[Prompt](hitTypeId, mTurkHIT.getHITId).toOptionLogging(logger)
       } yield (active += hit)
-      active
-    }
 
-    // finished means the HIT is not on turk (i.e., all assignments are done)
-    // active includes HITs for which some assignments are done and some are not
-    private[this] val (finishedHITInfosByPrompt, activeHITInfosByPrompt) = {
       val finishedRes = mutable.Map.empty[Prompt, List[HITInfo[Prompt, Response]]]
       val activeRes = mutable.Map.empty[Prompt, List[HITInfo[Prompt, Response]]]
       config.hitDataService.getAllHITInfo[Prompt, Response](hitTypeId).get
         .groupBy(_.hit.prompt)
         .foreach { case (prompt, infos) =>
           infos.foreach { hitInfo =>
-            if(activeHITs.contains(hitInfo.hit)) {
+            if(active.contains(hitInfo.hit)) {
               activeRes.put(prompt, hitInfo :: activeRes.get(prompt).getOrElse(Nil))
             } else {
               finishedRes.put(prompt, hitInfo :: activeRes.get(prompt).getOrElse(Nil))
             }
           }
       }
-      (finishedRes, activeRes)
+      (active, finishedRes, activeRes)
     }
 
     def finishedHITInfosByPromptIterator: Iterator[(Prompt, List[HITInfo[Prompt, Response]])] =
@@ -253,6 +250,7 @@ object HITManager {
           val curInfo = curData.find(_.hit.hitId == hit.hitId)
             .getOrElse {
             logger.error(s"Could not find active data for hit $hit")
+            activeHITs += hit
             HITInfo[Prompt, Response](hit, Nil)
           }
           val filteredData = curData.filterNot(_.hit.hitId == hit.hitId)
