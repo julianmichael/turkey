@@ -72,6 +72,24 @@ class NumAssignmentsHITManager[Prompt, Response](
   def isFinished(prompt: Prompt) =
     helper.finishedHITInfos(prompt).map(_.assignments.size).sum >= numAssignmentsForPrompt(prompt)
 
+  // upload new hits to fill gaps
+  def refreshHITs = {
+    val numToUpload = numHITsToKeepActive - helper.numActiveHITs
+    for(_ <- 1 to numToUpload) {
+      queuedPrompts.filterPop(p => !isFinished(p)) match {
+        case None => () // we're finishing off, woo
+        case Some(nextPrompt) =>
+          if(helper.isActive(nextPrompt)) {
+            // if this prompt is already active, queue it for later
+            // TODO probably want to delay it by a constant factor instead
+            queuedPrompts.enqueue(nextPrompt)
+          } else helper.createHIT(nextPrompt, numAssignmentsForPrompt(nextPrompt)) recover {
+            case _ => queuedPrompts.enqueue(nextPrompt) // put it back at the bottom to try later
+          }
+      }
+    }
+  }
+
   import scala.collection.JavaConverters._
 
   final override def reviewHITs: Unit = {
@@ -119,20 +137,6 @@ class NumAssignmentsHITManager[Prompt, Response](
       if numAssignmentsForPrompt(hit.prompt) > 1 && !reviewableHITSet.contains(hit)
     } yield reviewAssignmentsForHIT(hit)
 
-    // refresh: upload new hits to fill gaps
-    val numToUpload = numHITsToKeepActive - helper.numActiveHITs
-    for(_ <- 1 to numToUpload) {
-      queuedPrompts.filterPop(p => !isFinished(p)) match {
-        case None => () // we're finishing off, woo
-        case Some(nextPrompt) =>
-          if(helper.isActive(nextPrompt)) {
-            // if this prompt is already active, queue it for later
-            // TODO probably want to delay it by a constant factor instead
-            queuedPrompts.enqueue(nextPrompt)
-          } else helper.createHIT(nextPrompt, numAssignmentsForPrompt(nextPrompt)) recover {
-            case _ => queuedPrompts.enqueue(nextPrompt) // put it back at the bottom to try later
-          }
-      }
-    }
+    refreshHITs
   }
 }
