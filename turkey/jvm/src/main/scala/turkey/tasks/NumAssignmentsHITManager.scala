@@ -30,6 +30,8 @@ object NumAssignmentsHITManager {
 
 /** Simplest HIT manager, which gets a fixed number of assignments for every prompt
   * and approves all assignments immediately.
+  * NOTE: this will crash if you try to have > 100 assignments per HIT.
+  * could possibly be fixed but seems not necessary since that's a kind of ridic use case.
   */
 class NumAssignmentsHITManager[Prompt, Response](
   helper: HITManager.Helper[Prompt, Response],
@@ -98,6 +100,7 @@ class NumAssignmentsHITManager[Prompt, Response](
         config.service.listAssignmentsForHIT(
           (new ListAssignmentsForHITRequest)
             .withHITId(hit.hitId)
+            .withMaxResults(numAssignmentsForPrompt(hit.prompt))
             .withAssignmentStatuses(AssignmentStatus.Submitted))
       ).toOptionLogging(logger).toList
       mTurkAssignment <- getAssignmentsResult.getAssignments.asScala
@@ -108,11 +111,16 @@ class NumAssignmentsHITManager[Prompt, Response](
       assignment
     }
 
-    // reviewable HITs; will always cover all HITs asking for only one assignment
+    // reviewable HITs; will always cover <= 100 HITs asking for only one assignment
+    // it's rare that there are more than 100 reviewable HITs in one update,
+    // and not the end of the world if we wait until the next one...
+    // but... TODO fix with pagination
     val reviewableHITs = for {
       reviewableHITsResult <- Try(
         config.service.listReviewableHITs(
-          (new ListReviewableHITsRequest).withHITTypeId(hitTypeId))
+          (new ListReviewableHITsRequest)
+            .withHITTypeId(hitTypeId)
+            .withMaxResults(100))
       ).toOptionLogging(logger).toList
       mTurkHIT <- reviewableHITsResult.getHITs.asScala
       hit <- config.hitDataService.getHIT[Prompt](hitTypeId, mTurkHIT.getHITId).toOptionLogging(logger).toList
