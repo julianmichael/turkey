@@ -4,7 +4,6 @@ package tasks
 import turkey.util._
 
 import com.amazonaws.services.mturk.model.AssignmentStatus
-import com.amazonaws.services.mturk.model.ListHITsRequest
 import com.amazonaws.services.mturk.model.UpdateExpirationForHITRequest
 import com.amazonaws.services.mturk.model.DeleteHITRequest
 import com.amazonaws.services.mturk.model.ApproveAssignmentRequest
@@ -97,9 +96,8 @@ object HITManager {
     // actives by prompt includes HITs for which some assignments are done and some are not
     private[this] val (activeHITs, finishedHITInfosByPrompt, activeHITInfosByPrompt) = {
       val active = mutable.Set.empty[HIT[Prompt]]
-      import scala.collection.JavaConverters._
       for {
-        mTurkHIT <- config.service.listHITs(new ListHITsRequest).getHITs.asScala
+        mTurkHIT <- config.service.listAllHITs
         if mTurkHIT.getHITTypeId.equals(hitTypeId)
         hit <- config.hitDataService.getHIT[Prompt](hitTypeId, mTurkHIT.getHITId).toOptionLogging(logger)
       } yield (active += hit)

@@ -1,5 +1,6 @@
 import turkey._
 import turkey.tasks._
+import turkey.util._
 import turkey.sample._
 import com.amazonaws.services.mturk.model._
 import com.amazonaws.services.mturk._
@@ -45,13 +46,11 @@ def disableHITById(hitId: String) = {
 }
 
 def getActiveHITIds = {
-  config.service.listHITs(new ListHITsRequest).getHITs.asScala.toList.map(_.getHITId)
+  config.service.listAllHITs.map(_.getHITId)
 }
 
 def exit = {
-  // remove everything from the sandbox because it won't persist anyway
-  exp.disable
-
   config.actorSystem.terminate
 }
+
 exp.server
