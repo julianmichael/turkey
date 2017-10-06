@@ -15,6 +15,7 @@ import java.io.PrintWriter
 import com.amazonaws.services.mturk.AmazonMTurk
 import com.amazonaws.services.mturk.model.{HIT => MTurkHIT}
 import com.amazonaws.services.mturk.model.ListHITsRequest
+import com.amazonaws.services.mturk.model.ListWorkersWithQualificationTypeRequest
 
 /** Utility classes, methods, and extension methods for turkey. */
 package object util {
@@ -52,14 +53,41 @@ package object util {
     def listAllHITs = {
       @tailrec def getAllHITsAux(hitsSoFar: Vector[MTurkHIT], request: ListHITsRequest): Vector[MTurkHIT] = {
         val nextPage = client.listHITs(request)
-        val nextToken = nextPage.getNextToken
-        if(nextToken == null) {
+        val (newHITs, nextToken) = (nextPage.getHITs, nextPage.getNextToken)
+        if(newHITs == null) {
           hitsSoFar
         } else {
-          getAllHITsAux(hitsSoFar ++ nextPage.getHITs.asScala, request.withNextToken(nextToken))
+          val aggHITs = hitsSoFar ++ nextPage.getHITs.asScala
+          if(nextToken == null) {
+            aggHITs
+          } else {
+            getAllHITsAux(aggHITs, request.withNextToken(nextToken))
+          }
         }
       }
-      getAllHITsAux(Vector.empty[MTurkHIT], new ListHITsRequest().withMaxResults(10))
+      getAllHITsAux(Vector.empty[MTurkHIT], new ListHITsRequest().withMaxResults(100))
+    }
+
+    def listAllWorkersWithQualificationType(qualTypeId: String): Vector[String] = {
+      @tailrec def getAllWorkersWithQualTypeAux(workersSoFar: Vector[String], request: ListWorkersWithQualificationTypeRequest): Vector[String] = {
+        val nextPage = client.listWorkersWithQualificationType(request)
+        val (nextQualifications, nextToken) = (nextPage.getQualifications, nextPage.getNextToken)
+        if(nextQualifications == null) {
+          workersSoFar
+        } else {
+          val aggWorkers = workersSoFar ++ nextQualifications.asScala.toVector.map(_.getWorkerId)
+          if(nextToken == null) {
+            aggWorkers
+          } else {
+            getAllWorkersWithQualTypeAux(aggWorkers, request.withNextToken(nextToken))
+          }
+        }
+      }
+      getAllWorkersWithQualTypeAux(
+        Vector.empty[String],
+        new ListWorkersWithQualificationTypeRequest()
+          .withQualificationTypeId(qualTypeId)
+          .withMaxResults(100))
     }
   }
 
