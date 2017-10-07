@@ -1,5 +1,8 @@
-package turkey
-package tasks
+package turkey.tasks
+
+import turkey._
+
+import scala.language.higherKinds
 
 import turkey.util._
 
@@ -24,6 +27,20 @@ import scalatags.Text.TypedTag
 
 import upickle.default._
 
+trait AjaxServer[Request <: { type Response }] {
+  def getResponseWriter(request: Request): Writer[request.Response]
+  def processRequest(request: Request): request.Response
+}
+object AjaxServer {
+  val unitServer = new AjaxServer[UnitRequest.type] {
+    override def getResponseWriter(request: UnitRequest.type): Writer[request.Response] = implicitly[Writer[Unit]]
+    override def processRequest(request: UnitRequest.type): request.Response = ()
+  }
+}
+
+case object UnitRequest { final type Response = Unit }
+
+
 /** Specifies a kind of task to run on MTurk.
   *
   * The code defining an individual task type will be here.
@@ -47,15 +64,24 @@ sealed trait TaskSpecification {
   implicit val promptWriter: Writer[Prompt]
   type Response
   implicit val responseReader: Reader[Response]
-  type ApiRequest
-  implicit val apiRequestReader: Reader[ApiRequest]
-  type ApiResponse
-  implicit val apiResponseWriter: Writer[ApiResponse]
+
+  // general message request/response types because messages can be freely passed between client/server
+  type WebsocketRequest
+  implicit val websocketRequestReader: Reader[WebsocketRequest]
+  type WebsocketResponse
+  implicit val websocketResponseWriter: Writer[WebsocketResponse]
+
+  // response type depends on request type because each response is specific to a request
+  // type AjaxRequest
+  type AjaxRequest <: { type Response }
+  implicit val ajaxRequestReader: Reader[AjaxRequest]
+  val ajaxServer: AjaxServer[AjaxRequest]
+
   implicit val config: TaskConfig
 
   val taskKey: String
   val hitType: HITType
-  val apiFlow: Flow[ApiRequest, ApiResponse, Any]
+  val apiFlow: Flow[WebsocketRequest, WebsocketResponse, Any]
   val samplePrompt: Prompt
   val frozenHITTypeId: Option[String]
   val taskPageHeadElements: List[TypedTag[String]]
@@ -199,38 +225,86 @@ sealed trait TaskSpecification {
     """.trim
   }
 }
+
 object TaskSpecification {
-  private[this] case class TaskSpecificationImpl[P, R, ApiReq, ApiResp](
+
+  type NoAjax = TaskSpecification { type AjaxRequest = UnitRequest.type }
+  object NoAjax {
+    def apply[P, R, WebsocketReq, WebsocketResp](
+      taskKey: String,
+      hitType: HITType,
+      apiFlow: Flow[WebsocketReq, WebsocketResp, Any],
+      samplePrompt: P,
+      frozenHITTypeId: Option[String] = None,
+      taskPageHeadElements: List[TypedTag[String]] = Nil,
+      taskPageBodyElements: List[TypedTag[String]] = Nil)(
+      implicit promptWriter: Writer[P],
+      responseReader: Reader[R],
+      websocketRequestReader: Reader[WebsocketReq],
+      websocketResponseWriter: Writer[WebsocketResp],
+      config: TaskConfig
+    ): NoAjax {
+      type Prompt = P; type Response = R;
+      type WebsocketRequest = WebsocketReq; type WebsocketResponse = WebsocketResp;
+    } = TaskSpecificationImpl[P, R, WebsocketReq, WebsocketResp, UnitRequest.type](
+      taskKey,
+      hitType,
+      apiFlow,
+      AjaxServer.unitServer,
+      samplePrompt,
+      frozenHITTypeId,
+      taskPageHeadElements,
+      taskPageBodyElements)
+  }
+
+  private[this] case class TaskSpecificationImpl[P, R, WebsocketReq, WebsocketResp, AjaxReq <: { type Response }](
     override val taskKey: String,
     override val hitType: HITType,
-    override val apiFlow: Flow[ApiReq, ApiResp, Any],
+    override val apiFlow: Flow[WebsocketReq, WebsocketResp, Any],
+    override val ajaxServer: AjaxServer[AjaxReq],
     override val samplePrompt: P,
     override val frozenHITTypeId: Option[String],
     override val taskPageHeadElements: List[TypedTag[String]],
     override val taskPageBodyElements: List[TypedTag[String]])(
     implicit override val promptWriter: Writer[P],
-    val responseReader: Reader[R],
-    val apiRequestReader: Reader[ApiReq],
-    val apiResponseWriter: Writer[ApiResp],
-    val config: TaskConfig) extends TaskSpecification {
+    override val responseReader: Reader[R],
+    override val websocketRequestReader: Reader[WebsocketReq],
+    override val websocketResponseWriter: Writer[WebsocketResp],
+    override val ajaxRequestReader: Reader[AjaxReq],
+    override val config: TaskConfig) extends TaskSpecification {
 
     override type Prompt = P
     override type Response = R
-    override type ApiRequest = ApiReq
-    override type ApiResponse = ApiResp
+    override type WebsocketRequest = WebsocketReq
+    override type WebsocketResponse = WebsocketResp
+    override type AjaxRequest = AjaxReq
   }
-  def apply[P, R, ApiReq, ApiResp](
+  def apply[P, R, WebsocketReq, WebsocketResp, AjaxReq <: { type Response }](
     taskKey: String,
     hitType: HITType,
-    apiFlow: Flow[ApiReq, ApiResp, Any],
+    apiFlow: Flow[WebsocketReq, WebsocketResp, Any],
+    ajaxServer: AjaxServer[AjaxReq],
     samplePrompt: P,
     frozenHITTypeId: Option[String] = None,
     taskPageHeadElements: List[TypedTag[String]] = Nil,
     taskPageBodyElements: List[TypedTag[String]] = Nil)(
     implicit promptWriter: Writer[P],
     responseReader: Reader[R],
-    apiRequestReader: Reader[ApiReq],
-    apiResponseWriter: Writer[ApiResp],
-    config: TaskConfig): TaskSpecification { type Prompt = P; type Response = R; type ApiRequest = ApiReq; type ApiResponse = ApiResp } =
-    TaskSpecificationImpl[P, R, ApiReq, ApiResp](taskKey, hitType, apiFlow, samplePrompt, frozenHITTypeId, taskPageHeadElements, taskPageBodyElements)
+    websocketRequestReader: Reader[WebsocketReq],
+    websocketResponseWriter: Writer[WebsocketResp],
+    ajaxRequestReader: Reader[AjaxReq],
+    config: TaskConfig
+  ): TaskSpecification {
+    type Prompt = P; type Response = R;
+    type WebsocketRequest = WebsocketReq; type WebsocketResponse = WebsocketResp;
+    type AjaxRequest = AjaxReq
+  } = TaskSpecificationImpl[P, R, WebsocketReq, WebsocketResp, AjaxReq](
+    taskKey,
+    hitType,
+    apiFlow,
+    ajaxServer,
+    samplePrompt,
+    frozenHITTypeId,
+    taskPageHeadElements,
+    taskPageBodyElements)
 }

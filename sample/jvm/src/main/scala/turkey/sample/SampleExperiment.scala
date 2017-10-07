@@ -42,7 +42,7 @@ class SampleExperiment(implicit config: TaskConfig) {
   val samplePrompt = SamplePrompt(0)
 
   // the task specification is defined on the basis of the above fields
-  lazy val taskSpec = TaskSpecification[SamplePrompt, SampleResponse, ApiRequest, ApiResponse](
+  lazy val taskSpec = TaskSpecification.NoAjax[SamplePrompt, SampleResponse, ApiRequest, ApiResponse](
     sampleTaskKey, sampleHITType, sampleApiFlow, samplePrompt)
 
   // you will probably always construct a HITManager.Helper in this way for your HITManager instance

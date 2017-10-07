@@ -22,7 +22,6 @@ lazy val turkey = crossProject.settings(
   ),
   addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 ).jvmSettings(
-  // fork in console := true,
   libraryDependencies ++= Seq(
     "org.scala-lang.modules" %% "scala-xml" % "1.0.2", // for one line of code parsing answer XML
     "com.typesafe.akka" %% "akka-actor" % "2.4.8",
@@ -32,7 +31,6 @@ lazy val turkey = crossProject.settings(
     // java deps:
     "com.amazonaws" % "aws-java-sdk" % "1.11.198")
 ).jsSettings(
-  addCompilerPlugin("org.scalamacros" %% "paradise" % "2.1.0" cross CrossVersion.full),
   libraryDependencies ++= Seq(
     "org.scala-js" %%% "scalajs-dom" % "0.9.0",
     "be.doeraene" %%% "scalajs-jquery" % "0.9.0"),
@@ -79,7 +77,6 @@ lazy val turkeySample = crossProject.in(file("sample")).settings(
     "com.github.japgolly.scalajs-react" %%% "ext-monocle" % scalaJSReactVersion,
     "com.github.japgolly.scalacss" %%% "core" % "0.4.1",
     "com.github.japgolly.scalacss" %%% "ext-react" % "0.4.1"
-    // "com.github.julien-truffaut" %%% "monocle-law"   % monocleVersion % "test"
   ),
   relativeSourceMaps := true,
   scalaJSStage in Global := FastOptStage,

@@ -7,7 +7,7 @@ import com.amazonaws.services.mturk._
 val hitDataService = new InMemoryHITDataService
 implicit val config = SandboxTaskConfig(
   "turkey-sample",
-  "nlp.cs.washington.edu",
+  "localhost",
   hitDataService)
 val exp = new SampleExperiment
 

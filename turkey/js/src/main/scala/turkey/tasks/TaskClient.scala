@@ -46,7 +46,7 @@ abstract class TaskClient[Prompt : Reader, Response : Writer] {
     val isHttps = dom.document.location.protocol == "https:"
     val wsProtocol = if (isHttps) "wss" else "ws"
     val serverPort = if(isHttps) httpsPort else httpPort
-    s"$wsProtocol://$serverDomain:$serverPort/websocket?taskKey=$taskKey"
+    s"$wsProtocol://$serverDomain:$serverPort/task/$taskKey/websocket"
   }
 
   lazy val prompt: Prompt = {
