@@ -28,7 +28,7 @@ import com.typesafe.scalalogging.StrictLogging
   * Each TaskSpecification has its own Flow that specifies how to respond to WebSocket messages from clients.
   * This web service hosts the JS code that clients GET, and delegates Websocket messages to their tasks' flows.
   *
-  * It also hosts a sample version of each task at http://localhost:<http port>/?taskKey=<task key>.
+  * It also hosts a sample version of each task at http(s)://<domain>:<port>/task/<task key>/preview.
   */
 class Webservice(
   tasks: List[TaskSpecification])(
@@ -49,14 +49,7 @@ class Webservice(
             taskSpecOpt.map { taskSpec =>
               HttpEntity(
                 ContentTypes.`text/html(UTF-8)`,
-                TaskPage.htmlPage(
-                  taskSpec.samplePrompt,
-                  taskSpec,
-                  useHttps = shouldUseHttps,
-                  headTags = taskSpec.taskPageHeadElements,
-                  bodyEndTags = taskSpec.taskPageBodyElements)(
-                  taskSpec.promptWriter, config
-                ).render
+                taskSpec.createTaskHTMLPage(taskSpec.samplePrompt, shouldUseHttps)
               )
             }
           }
@@ -69,18 +62,20 @@ class Webservice(
           case Some(taskSpec) =>
             handleWebSocketMessages(websocketFlow(taskSpec))
         }
-      } ~ (post & path("ajax" / Segments) & entity(as[String])) { (_, e) =>
-        complete {
-          taskSpecOpt.flatMap { taskSpec =>
-            scala.util.Try {
-              import taskSpec.ajaxRequestReader
-              val request = read[taskSpec.AjaxRequest](e)
-              val responseWriter = taskSpec.ajaxServer.getResponseWriter(request)
-              val response = taskSpec.ajaxServer.processRequest(request)
-              HttpEntity(
-                ContentTypes.`text/html(UTF-8)`,
-                write(response)(responseWriter))
-            }.toOption
+      } ~ (post & path("ajax")) {
+        entity(as[String]) { e =>
+          complete {
+            taskSpecOpt.flatMap { taskSpec =>
+              scala.util.Try {
+                import taskSpec.ajaxRequestReader
+                val request = read[taskSpec.AjaxRequest](e)
+                val responseWriter = taskSpec.ajaxResponseWriter.getWriter(request)
+                val response = taskSpec.ajaxService.processRequest(request)
+                HttpEntity(
+                  ContentTypes.`text/html(UTF-8)`,
+                  write(response)(responseWriter))
+              }.toOption
+            }
           }
         }
       }

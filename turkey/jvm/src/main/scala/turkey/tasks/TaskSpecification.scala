@@ -27,20 +27,6 @@ import scalatags.Text.TypedTag
 
 import upickle.default._
 
-trait AjaxServer[Request <: { type Response }] {
-  def getResponseWriter(request: Request): Writer[request.Response]
-  def processRequest(request: Request): request.Response
-}
-object AjaxServer {
-  val unitServer = new AjaxServer[UnitRequest.type] {
-    override def getResponseWriter(request: UnitRequest.type): Writer[request.Response] = implicitly[Writer[Unit]]
-    override def processRequest(request: UnitRequest.type): request.Response = ()
-  }
-}
-
-case object UnitRequest { final type Response = Unit }
-
-
 /** Specifies a kind of task to run on MTurk.
   *
   * The code defining an individual task type will be here.
@@ -60,6 +46,10 @@ case object UnitRequest { final type Response = Unit }
   * @tparam Response
   */
 sealed trait TaskSpecification {
+  val taskKey: String
+  val hitType: HITType
+  implicit val config: TaskConfig
+
   type Prompt
   implicit val promptWriter: Writer[Prompt]
   type Response
@@ -72,17 +62,15 @@ sealed trait TaskSpecification {
   implicit val websocketResponseWriter: Writer[WebsocketResponse]
 
   // response type depends on request type because each response is specific to a request
-  // type AjaxRequest
   type AjaxRequest <: { type Response }
   implicit val ajaxRequestReader: Reader[AjaxRequest]
-  val ajaxServer: AjaxServer[AjaxRequest]
+  implicit val ajaxResponseWriter: ResponseWriter[AjaxRequest]
 
-  implicit val config: TaskConfig
-
-  val taskKey: String
-  val hitType: HITType
-  val apiFlow: Flow[WebsocketRequest, WebsocketResponse, Any]
   val samplePrompt: Prompt
+
+  val apiFlow: Flow[WebsocketRequest, WebsocketResponse, Any]
+  val ajaxService: Service[AjaxRequest]
+
   val frozenHITTypeId: Option[String]
   val taskPageHeadElements: List[TypedTag[String]]
   val taskPageBodyElements: List[TypedTag[String]]
@@ -194,6 +182,15 @@ sealed trait TaskSpecification {
       response = extractResponse(mTurkAssignment.getAnswer),
       feedback = extractFeedback(mTurkAssignment.getAnswer))
 
+  final def createTaskHTMLPage(prompt: Prompt, useHttps: Boolean): String =
+    TaskPage.htmlPage(
+      prompt,
+      this,
+      useHttps = useHttps,
+      headTags = taskPageHeadElements,
+      bodyEndTags = taskPageBodyElements
+    ).render
+
   // == Private methods and fields ==
 
   // auxiliary method for extracting response and feedback
@@ -218,7 +215,7 @@ sealed trait TaskSpecification {
       <?xml version="1.0" encoding="UTF-8"?>
       <HTMLQuestion xmlns="http://mechanicalturk.amazonaws.com/AWSMechanicalTurkDataSchemas/2011-11-11/HTMLQuestion.xsd">
         <HTMLContent><![CDATA[
-          <!DOCTYPE html>${TaskPage.htmlPage(prompt, this, useHttps = true, headTags = taskPageHeadElements, bodyEndTags = taskPageBodyElements).render}
+          <!DOCTYPE html>${createTaskHTMLPage(prompt, useHttps = true)}
         ]]></HTMLContent>
         <FrameHeight>600</FrameHeight>
       </HTMLQuestion>
@@ -228,7 +225,61 @@ sealed trait TaskSpecification {
 
 object TaskSpecification {
 
-  type NoAjax = TaskSpecification { type AjaxRequest = UnitRequest.type }
+  type NoApi = NoAjax with NoWebsockets
+  object NoApi {
+    def apply[P, R](
+      taskKey: String,
+      hitType: HITType,
+      samplePrompt: P,
+      frozenHITTypeId: Option[String] = None,
+      taskPageHeadElements: List[TypedTag[String]] = Nil,
+      taskPageBodyElements: List[TypedTag[String]] = Nil)(
+      implicit promptWriter: Writer[P],
+      responseReader: Reader[R],
+      config: TaskConfig
+    ): NoApi {
+      type Prompt = P; type Response = R;
+    } = TaskSpecificationImpl[P, R, Unit, Unit, Service.UnitRequest](
+      taskKey,
+      hitType,
+      Flow[Unit],
+      Service.unitServer,
+      samplePrompt,
+      frozenHITTypeId,
+      taskPageHeadElements,
+      taskPageBodyElements)
+  }
+
+  type NoWebsockets = TaskSpecification { type WebsocketRequest = Unit; type WebsocketResponse = Unit }
+  object NoWebsockets {
+    def apply[P, R, AjaxReq <: { type Response }](
+      taskKey: String,
+      hitType: HITType,
+      ajaxService: Service[AjaxReq],
+      samplePrompt: P,
+      frozenHITTypeId: Option[String] = None,
+      taskPageHeadElements: List[TypedTag[String]] = Nil,
+      taskPageBodyElements: List[TypedTag[String]] = Nil)(
+      implicit promptWriter: Writer[P],
+      responseReader: Reader[R],
+      ajaxRequestReader: Reader[AjaxReq],
+      ajaxResponseWriter: ResponseWriter[AjaxReq],
+      config: TaskConfig
+    ): NoWebsockets {
+      type Prompt = P; type Response = R;
+      type AjaxRequest = AjaxReq;
+    } = TaskSpecificationImpl[P, R, Unit, Unit, AjaxReq](
+      taskKey,
+      hitType,
+      Flow[Unit],
+      ajaxService,
+      samplePrompt,
+      frozenHITTypeId,
+      taskPageHeadElements,
+      taskPageBodyElements)
+  }
+
+  type NoAjax = TaskSpecification { type AjaxRequest = Service.UnitRequest }
   object NoAjax {
     def apply[P, R, WebsocketReq, WebsocketResp](
       taskKey: String,
@@ -246,11 +297,11 @@ object TaskSpecification {
     ): NoAjax {
       type Prompt = P; type Response = R;
       type WebsocketRequest = WebsocketReq; type WebsocketResponse = WebsocketResp;
-    } = TaskSpecificationImpl[P, R, WebsocketReq, WebsocketResp, UnitRequest.type](
+    } = TaskSpecificationImpl[P, R, WebsocketReq, WebsocketResp, Service.UnitRequest](
       taskKey,
       hitType,
       apiFlow,
-      AjaxServer.unitServer,
+      Service.unitServer,
       samplePrompt,
       frozenHITTypeId,
       taskPageHeadElements,
@@ -261,7 +312,7 @@ object TaskSpecification {
     override val taskKey: String,
     override val hitType: HITType,
     override val apiFlow: Flow[WebsocketReq, WebsocketResp, Any],
-    override val ajaxServer: AjaxServer[AjaxReq],
+    override val ajaxService: Service[AjaxReq],
     override val samplePrompt: P,
     override val frozenHITTypeId: Option[String],
     override val taskPageHeadElements: List[TypedTag[String]],
@@ -271,6 +322,7 @@ object TaskSpecification {
     override val websocketRequestReader: Reader[WebsocketReq],
     override val websocketResponseWriter: Writer[WebsocketResp],
     override val ajaxRequestReader: Reader[AjaxReq],
+    override val ajaxResponseWriter: ResponseWriter[AjaxReq],
     override val config: TaskConfig) extends TaskSpecification {
 
     override type Prompt = P
@@ -283,7 +335,7 @@ object TaskSpecification {
     taskKey: String,
     hitType: HITType,
     apiFlow: Flow[WebsocketReq, WebsocketResp, Any],
-    ajaxServer: AjaxServer[AjaxReq],
+    ajaxService: Service[AjaxReq],
     samplePrompt: P,
     frozenHITTypeId: Option[String] = None,
     taskPageHeadElements: List[TypedTag[String]] = Nil,
@@ -293,6 +345,7 @@ object TaskSpecification {
     websocketRequestReader: Reader[WebsocketReq],
     websocketResponseWriter: Writer[WebsocketResp],
     ajaxRequestReader: Reader[AjaxReq],
+    ajaxResponseWriter: ResponseWriter[AjaxReq],
     config: TaskConfig
   ): TaskSpecification {
     type Prompt = P; type Response = R;
@@ -302,7 +355,7 @@ object TaskSpecification {
     taskKey,
     hitType,
     apiFlow,
-    ajaxServer,
+    ajaxService,
     samplePrompt,
     frozenHITTypeId,
     taskPageHeadElements,

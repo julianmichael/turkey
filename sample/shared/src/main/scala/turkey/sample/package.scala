@@ -5,18 +5,28 @@ package object sample {
   // They should be serializable and you should not expect to have to change these often;
   // all HIT data will be written with serialized versions of the prompts and responses.
   // A good rule of thumb is to keep the minimal necessary amount of information in them.
-  case class SamplePrompt(sentence: Int)
+  case class SamplePrompt(id: Int)
   case class SampleResponse(isGood: Boolean)
 
-  // you must also have API request and response types for the WebSocket API.
-  sealed trait ApiRequest
-  case class SentenceRequest(id: Int) extends ApiRequest
-
-  sealed trait ApiResponse
-  case class SentenceResponse(id: Int, sentence: String) extends ApiResponse
-
-  // finally, you must define a task key (string) for every task, which is unique to that task.
+  // you must define a task key (string) for every task, which is unique to that task.
   // this will be used as a URL parameter to access the right client code, websocket flow, etc.
   // when interfacing between the client and server.
   val sampleTaskKey = "sample"
+
+  // You then may define your API datatypes for the ajax and websocket APIs (if necessary).
+
+  case class SampleAjaxResponse(sentence: String)
+
+  case class SampleAjaxRequest(prompt: SamplePrompt) {
+    type Response = SampleAjaxResponse
+  }
+  object SampleAjaxRequest {
+    import turkey.tasks._
+    import upickle.default._
+
+    implicit val responseRW = new ResponseRW[SampleAjaxRequest] {
+      override def getReader(request: SampleAjaxRequest) = implicitly[Reader[request.Response]]
+      override def getWriter(request: SampleAjaxRequest) = implicitly[Writer[request.Response]]
+    }
+  }
 }

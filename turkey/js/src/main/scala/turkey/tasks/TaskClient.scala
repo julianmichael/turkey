@@ -5,12 +5,18 @@ import scalajs.js.JSApp
 import org.scalajs.jquery.jQuery
 import org.scalajs.dom
 
+import scala.concurrent.Future
+
 import upickle.default._
 
 /** Superclass for an implementation of a client/interface for a turk task.
   * Gives access by field to all of the information written into the `TaskPage` on the server.
   */
-abstract class TaskClient[Prompt : Reader, Response : Writer] {
+abstract class TaskClient[
+  Prompt : Reader,
+  Response : Writer,
+  AjaxRequest <: { type Response } : Writer : ResponseReader
+] {
   import scala.scalajs.js.Dynamic.global
 
   lazy val assignmentIdOpt: Option[String] = {
@@ -40,6 +46,21 @@ abstract class TaskClient[Prompt : Reader, Response : Writer] {
 
   lazy val httpsPort: Int = {
     read[Int](jQuery(s"#$httpsPortLabel").attr("value").get)
+  }
+
+  lazy val ajaxUri = {
+    val isHttps = dom.document.location.protocol == "https:"
+    val ajaxHttpProtocol = if (isHttps) "https" else "http"
+    val serverPort = if(isHttps) httpsPort else httpPort
+    s"$ajaxHttpProtocol://$serverDomain:$serverPort/task/$taskKey/ajax"
+  }
+
+  def makeAjaxRequest(request: AjaxRequest): Future[request.Response] = {
+    import scala.concurrent.ExecutionContext.Implicits.global
+    dom.ext.Ajax
+      .post(url = ajaxUri, data = write(request))
+      .map(response => read[request.Response](response.responseText)(
+             implicitly[ResponseReader[AjaxRequest]].getReader(request)))
   }
 
   lazy val websocketUri: String = {

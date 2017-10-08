@@ -33,17 +33,22 @@ class SampleExperiment(implicit config: TaskConfig) {
   // you must define a Flow (type is from akka-http) for this task, which will determine how
   // the server responds to WebSocket messages from clients.
   // Here, we map the prompt (a sentence index) to the sentence it maps to.
-  lazy val sampleApiFlow = Flow[ApiRequest].map {
-    case SentenceRequest(id) => SentenceResponse(id, sentences(id))
+  // lazy val sampleApiFlow = Flow[ApiRequest].map {
+  //   case SentenceRequest(id) => SentenceResponse(id, sentences(id))
+  // }
+
+  lazy val sampleAjaxService = new Service[SampleAjaxRequest] {
+    def processRequest(request: SampleAjaxRequest) =
+      SampleAjaxResponse(sentences(request.prompt.id))
   }
 
   // you also need a sample prompt for when you view the local version of the task at
-  // http://localhost:<http port>/?taskKey=<task key>
+  // http://localhost:<http port>/task/<task key>/preview
   val samplePrompt = SamplePrompt(0)
 
   // the task specification is defined on the basis of the above fields
-  lazy val taskSpec = TaskSpecification.NoAjax[SamplePrompt, SampleResponse, ApiRequest, ApiResponse](
-    sampleTaskKey, sampleHITType, sampleApiFlow, samplePrompt)
+  lazy val taskSpec = TaskSpecification.NoWebsockets[SamplePrompt, SampleResponse, SampleAjaxRequest](
+    sampleTaskKey, sampleHITType, sampleAjaxService, samplePrompt)
 
   // you will probably always construct a HITManager.Helper in this way for your HITManager instance
   // that will coordinate the reviewing and uploading of assignments and HITs.

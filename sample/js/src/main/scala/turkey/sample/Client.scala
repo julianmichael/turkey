@@ -22,52 +22,30 @@ import monocle.macros._
 import japgolly.scalajs.react.MonocleReact._
 
 /** Sample client built using React. */
-object Client extends TaskClient[SamplePrompt, SampleResponse] {
+object Client extends TaskClient[SamplePrompt, SampleResponse, SampleAjaxRequest] {
 
   sealed trait State
-  @Lenses case class Loading(
-    message: String
-  ) extends State
+  case object Loading extends State
   @Lenses case class Loaded(
     sentence: String,
     isGood: Boolean
   ) extends State
   object State {
-    def loading[A]: Prism[State, Loading] = GenPrism[State, Loading]
+    def loading[A]: Prism[State, Loading.type] = GenPrism[State, Loading.type]
     def loaded[A]: Prism[State, Loaded] = GenPrism[State, Loaded]
   }
 
   val isGoodLens = State.loaded composeLens Loaded.isGood
 
   class FullUIBackend(scope: BackendScope[Unit, State]) {
-    def load: Callback = scope.state map {
-      case Loading(_) =>
-        val socket = new dom.WebSocket(websocketUri)
-        socket.onopen = { (event: Event) =>
-          scope.setState(Loading("Retrieving data")).runNow
-          socket.send(
-            write[HeartbeatingWebSocketMessage[ApiRequest]](
-              WebSocketMessage(SentenceRequest(prompt.sentence))))
-        }
-        socket.onerror = { (event: ErrorEvent) =>
-          val msg = s"Connection failure. Error code: ${event.colno}"
-          System.err.println(msg)
-          // TODO maybe retry or something
-        }
-        socket.onmessage = { (event: MessageEvent) ⇒
-          val msg = event.data.toString
-          read[HeartbeatingWebSocketMessage[ApiResponse]](msg) match {
-            case Heartbeat => socket.send(msg) // send heartbeat back
-            case WebSocketMessage(SentenceResponse(id, sentence)) =>
-              scope.setState(Loaded(sentence, false)).runNow
+    def load: Callback = Callback.future {
+      makeAjaxRequest(SampleAjaxRequest(prompt)).map {
+        case SampleAjaxResponse(sentence) =>
+          scope.modState {
+            case Loading => Loaded(sentence, false)
+            case l @ Loaded(_, _) => System.err.println("Data already loaded."); l
           }
-        }
-        socket.onclose = { (event: Event) =>
-          val msg = s"Connection lost."
-          System.err.println(msg)
-        }
-      case Loaded(_, _) =>
-        System.err.println("Data already loaded.")
+      }
     }
 
     def updateResponse: Callback = scope.state.map {
@@ -78,8 +56,10 @@ object Client extends TaskClient[SamplePrompt, SampleResponse] {
       <.div(
         instructions,
         s match {
-          case Loading(msg) =>
-            <.p(s"Loading sentence ($msg)...")
+          case Loading =>
+            <.p("""Connecting to server... (if this message does not disappear,
+                 that means the server is down.
+                 Try refreshing the page now or in a few minutes.)""")
           case Loaded(sentence, isGood) =>
             <.div(
               <.blockquote(sentence),
@@ -107,7 +87,7 @@ object Client extends TaskClient[SamplePrompt, SampleResponse] {
                 ^.`type` := "submit",
                 ^.disabled := isNotAssigned,
                 ^.id := FieldLabels.submitButtonLabel,
-                ^.value := "submit") 
+                ^.value := "submit")
             )
         }
       )
@@ -115,7 +95,7 @@ object Client extends TaskClient[SamplePrompt, SampleResponse] {
   }
 
   val FullUI = ReactComponentB[Unit]("Full UI")
-    .initialState(Loading("Connecting to server"): State)
+    .initialState(Loading: State)
     .renderBackend[FullUIBackend]
     .componentDidMount(context => context.backend.load)
     .componentDidUpdate(context => context.$.backend.updateResponse)
