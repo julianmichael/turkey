@@ -11,14 +11,20 @@ import scala.concurrent.duration._
 import scala.language.postfixOps
 
 import akka.actor.ActorSystem
-import akka.stream.stage._
 
-import akka.http.scaladsl.server.Directives
-import akka.http.scaladsl.model._
-import akka.http.scaladsl.model.ws.{ Message, TextMessage, BinaryMessage }
+import akka.stream.stage._
 import akka.stream.Materializer
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl._
+
+import akka.http.scaladsl.server.Directives
+import akka.http.scaladsl.server.ExceptionHandler
+import akka.http.scaladsl.server.RejectionHandler
+import akka.http.scaladsl.model._
+import akka.http.scaladsl.model.ws.{ Message, TextMessage, BinaryMessage }
+
+import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
+import ch.megard.akka.http.cors.scaladsl.settings.CorsSettings
 
 import upickle.default._
 
@@ -38,48 +44,58 @@ class Webservice(
   // assume keys are unique
   val taskIndex = tasks.map(t => (t.taskKey -> t)).toMap
 
+  // TODO could make this more specific to turk domains
+  implicit val corsSettings = CorsSettings.defaultSettings
+
+  val rejectionHandler = corsRejectionHandler withFallback RejectionHandler.default
+
   // we use the akka-http routing DSL to specify the server's behavior
   def route =
-    pathPrefix("task" / Segment) { taskKey =>
-      val taskSpecOpt = taskIndex.get(taskKey)
-      path("preview") {
-        extractScheme { scheme =>
-          val shouldUseHttps = scheme == "https"
-          complete {
-            taskSpecOpt.map { taskSpec =>
-              HttpEntity(
-                ContentTypes.`text/html(UTF-8)`,
-                taskSpec.createTaskHTMLPage(taskSpec.samplePrompt, shouldUseHttps)
-              )
+    cors(corsSettings) {
+      handleRejections(rejectionHandler) {
+        pathPrefix("task" / Segment) { taskKey =>
+          val taskSpecOpt = taskIndex.get(taskKey)
+          path("preview") {
+            extractScheme { scheme =>
+              val shouldUseHttps = scheme == "https"
+              complete {
+                taskSpecOpt.map { taskSpec =>
+                  HttpEntity(
+                    ContentTypes.`text/html(UTF-8)`,
+                    taskSpec.createTaskHTMLPage(taskSpec.samplePrompt, shouldUseHttps)
+                  )
+                }
+              }
+            }
+          } ~ path("websocket") {
+            taskSpecOpt match {
+              case None =>
+                logger.warn(s"Got websocket request for task $taskKey which matches no task")
+                handleWebSocketMessages(Flow[Message].filter(_ => false))
+              case Some(taskSpec) =>
+                handleWebSocketMessages(websocketFlow(taskSpec))
+            }
+          } ~ (post & path("ajax")) {
+            entity(as[String]) { e =>
+              complete {
+                taskSpecOpt.flatMap { taskSpec =>
+                  scala.util.Try {
+                    import taskSpec.ajaxRequestReader
+                    val request = read[taskSpec.AjaxRequest](e)
+                    val responseWriter = taskSpec.ajaxResponseWriter.getWriter(request)
+                    val response = taskSpec.ajaxService.processRequest(request)
+                    HttpEntity(
+                      ContentTypes.`text/html(UTF-8)`,
+                      write(response)(responseWriter))
+                  }.toOption
+                }
+              }
             }
           }
-        }
-      } ~ path("websocket") {
-        taskSpecOpt match {
-          case None =>
-            logger.warn(s"Got websocket request for task $taskKey which matches no task")
-            handleWebSocketMessages(Flow[Message].filter(_ => false))
-          case Some(taskSpec) =>
-            handleWebSocketMessages(websocketFlow(taskSpec))
-        }
-      } ~ (post & path("ajax")) {
-        entity(as[String]) { e =>
-          complete {
-            taskSpecOpt.flatMap { taskSpec =>
-              scala.util.Try {
-                import taskSpec.ajaxRequestReader
-                val request = read[taskSpec.AjaxRequest](e)
-                val responseWriter = taskSpec.ajaxResponseWriter.getWriter(request)
-                val response = taskSpec.ajaxService.processRequest(request)
-                HttpEntity(
-                  ContentTypes.`text/html(UTF-8)`,
-                  write(response)(responseWriter))
-              }.toOption
-            }
-          }
-        }
+        } ~ getFromResourceDirectory("")
+
       }
-    } ~ getFromResourceDirectory("")
+    }
 
   // task-specific flow for a websocket connection with a client
   private[this] def websocketFlow(taskSpec: TaskSpecification): Flow[Message, Message, Any] = {

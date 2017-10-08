@@ -25,7 +25,8 @@ lazy val turkey = crossProject.settings(
   libraryDependencies ++= Seq(
     "org.scala-lang.modules" %% "scala-xml" % "1.0.2", // for one line of code parsing answer XML
     "com.typesafe.akka" %% "akka-actor" % "2.4.8",
-    "com.typesafe.akka" %% "akka-http" % "10.0.8",
+    "com.typesafe.akka" %% "akka-http" % "10.0.10",
+    "ch.megard" %% "akka-http-cors" % "0.2.2",
     "com.jsuereth" % "scala-arm_2.11" % "2.0-RC1",
     "com.typesafe.scala-logging" %% "scala-logging" % "3.5.0",
     // java deps:
