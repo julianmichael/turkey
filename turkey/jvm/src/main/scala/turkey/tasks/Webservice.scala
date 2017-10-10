@@ -57,13 +57,15 @@ class Webservice(
           val taskSpecOpt = taskIndex.get(taskKey)
           path("preview") {
             extractScheme { scheme =>
-              val shouldUseHttps = scheme == "https"
-              complete {
-                taskSpecOpt.map { taskSpec =>
-                  HttpEntity(
-                    ContentTypes.`text/html(UTF-8)`,
-                    taskSpec.createTaskHTMLPage(taskSpec.samplePrompt, shouldUseHttps)
-                  )
+              parameter('httpsOverride.as[Boolean].?) { httpsOverride =>
+                val shouldUseHttps = httpsOverride.getOrElse(scheme == "https")
+                complete {
+                  taskSpecOpt.map { taskSpec =>
+                    HttpEntity(
+                      ContentTypes.`text/html(UTF-8)`,
+                      taskSpec.createTaskHTMLPage(taskSpec.samplePrompt, shouldUseHttps)
+                    )
+                  }
                 }
               }
             }
