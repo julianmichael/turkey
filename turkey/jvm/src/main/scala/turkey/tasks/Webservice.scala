@@ -57,7 +57,7 @@ class Webservice(
           val taskSpecOpt = taskIndex.get(taskKey)
           path("preview") {
             extractScheme { scheme =>
-              parameter('httpsOverride.as[Boolean].?) { httpsOverride =>
+              parameter('https.as[Boolean].?) { httpsOverride =>
                 val shouldUseHttps = httpsOverride.getOrElse(scheme == "https")
                 complete {
                   taskSpecOpt.map { taskSpec =>
