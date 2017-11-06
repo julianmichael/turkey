@@ -66,7 +66,7 @@ sealed trait TaskSpecification {
   implicit val ajaxRequestReader: Reader[AjaxRequest]
   implicit val ajaxResponseWriter: ResponseWriter[AjaxRequest]
 
-  val samplePrompt: Prompt
+  val samplePrompts: Vector[Prompt]
 
   val apiFlow: Flow[WebsocketRequest, WebsocketResponse, Any]
   val ajaxService: Service[AjaxRequest]
@@ -230,7 +230,7 @@ object TaskSpecification {
     def apply[P, R](
       taskKey: String,
       hitType: HITType,
-      samplePrompt: P,
+      samplePrompts: Vector[P],
       frozenHITTypeId: Option[String] = None,
       taskPageHeadElements: List[TypedTag[String]] = Nil,
       taskPageBodyElements: List[TypedTag[String]] = Nil)(
@@ -244,7 +244,7 @@ object TaskSpecification {
       hitType,
       Flow[Unit],
       Service.unitServer,
-      samplePrompt,
+      samplePrompts,
       frozenHITTypeId,
       taskPageHeadElements,
       taskPageBodyElements)
@@ -256,7 +256,7 @@ object TaskSpecification {
       taskKey: String,
       hitType: HITType,
       ajaxService: Service[AjaxReq],
-      samplePrompt: P,
+      samplePrompts: Vector[P],
       frozenHITTypeId: Option[String] = None,
       taskPageHeadElements: List[TypedTag[String]] = Nil,
       taskPageBodyElements: List[TypedTag[String]] = Nil)(
@@ -273,7 +273,7 @@ object TaskSpecification {
       hitType,
       Flow[Unit],
       ajaxService,
-      samplePrompt,
+      samplePrompts,
       frozenHITTypeId,
       taskPageHeadElements,
       taskPageBodyElements)
@@ -285,7 +285,7 @@ object TaskSpecification {
       taskKey: String,
       hitType: HITType,
       apiFlow: Flow[WebsocketReq, WebsocketResp, Any],
-      samplePrompt: P,
+      samplePrompts: Vector[P],
       frozenHITTypeId: Option[String] = None,
       taskPageHeadElements: List[TypedTag[String]] = Nil,
       taskPageBodyElements: List[TypedTag[String]] = Nil)(
@@ -302,7 +302,7 @@ object TaskSpecification {
       hitType,
       apiFlow,
       Service.unitServer,
-      samplePrompt,
+      samplePrompts,
       frozenHITTypeId,
       taskPageHeadElements,
       taskPageBodyElements)
@@ -313,7 +313,7 @@ object TaskSpecification {
     override val hitType: HITType,
     override val apiFlow: Flow[WebsocketReq, WebsocketResp, Any],
     override val ajaxService: Service[AjaxReq],
-    override val samplePrompt: P,
+    override val samplePrompts: Vector[P],
     override val frozenHITTypeId: Option[String],
     override val taskPageHeadElements: List[TypedTag[String]],
     override val taskPageBodyElements: List[TypedTag[String]])(
@@ -336,7 +336,7 @@ object TaskSpecification {
     hitType: HITType,
     apiFlow: Flow[WebsocketReq, WebsocketResp, Any],
     ajaxService: Service[AjaxReq],
-    samplePrompt: P,
+    samplePrompts: Vector[P],
     frozenHITTypeId: Option[String] = None,
     taskPageHeadElements: List[TypedTag[String]] = Nil,
     taskPageBodyElements: List[TypedTag[String]] = Nil)(
@@ -356,7 +356,7 @@ object TaskSpecification {
     hitType,
     apiFlow,
     ajaxService,
-    samplePrompt,
+    samplePrompts,
     frozenHITTypeId,
     taskPageHeadElements,
     taskPageBodyElements)

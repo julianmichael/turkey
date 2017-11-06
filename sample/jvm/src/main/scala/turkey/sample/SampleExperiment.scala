@@ -44,11 +44,11 @@ class SampleExperiment(implicit config: TaskConfig) {
 
   // you also need a sample prompt for when you view the local version of the task at
   // http://localhost:<http port>/task/<task key>/preview
-  val samplePrompt = SamplePrompt(0)
+  val samplePrompts = Vector(SamplePrompt(0))
 
   // the task specification is defined on the basis of the above fields
   lazy val taskSpec = TaskSpecification.NoWebsockets[SamplePrompt, SampleResponse, SampleAjaxRequest](
-    sampleTaskKey, sampleHITType, sampleAjaxService, samplePrompt)
+    sampleTaskKey, sampleHITType, sampleAjaxService, samplePrompts)
 
   // you will probably always construct a HITManager.Helper in this way for your HITManager instance
   // that will coordinate the reviewing and uploading of assignments and HITs.
@@ -60,7 +60,7 @@ class SampleExperiment(implicit config: TaskConfig) {
   // it gets a fixed number of approved assignments for every HIT.
   lazy val hitManager = actorSystem.actorOf(
     Props(NumAssignmentsHITManager.constAssignments[SamplePrompt, SampleResponse](
-            helper, 1, 3, List(samplePrompt).iterator)))
+            helper, 1, 3, samplePrompts.iterator)))
 
   // then you create the web server which will host the service
   // (the server MUST BE LIVE as long as the HITs are on Turk)
