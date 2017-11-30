@@ -1,4 +1,3 @@
 # turkey
-Creating and manage Mechanical Turk tasks in the style of Single Page Applications with Scala.
 
-Documentation coming soon.
+This is deprecated in favor of [spacro](https://github.com/julianmichael/spacro). Sorry, "turkey" was too weird and arbitrary of a name and ties it too specifically to MTurk. "spacro" for "Single-Page Applications for Crowdsourcing" is a bit more representative. Naming things is hard...
